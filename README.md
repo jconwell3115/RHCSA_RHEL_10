@@ -5,32 +5,28 @@ created: 2026-07-08
 covers: [RHCSA Practice Exam 1, RHCSA Practice Exam 2]
 note: Golden image build lives here; RHCA lab guide references it downstream.
 ---
-
 # 🧪 RHCSA Practice Exam — Environment Setup & Usage Guide
 
 > **Purpose:** Build, seed, run, and reset the lab environments for **RHCSA Practice Exam 1** (alpha/bravo) and **RHCSA Practice Exam 2** (charlie/delta).
->
 > **Platform:** libvirt/KVM on your existing RHEL host.
->
 > **Ordering note:** RHCSA comes first in your cert journey, so the **golden image build lives in this guide**. The later `[[RHCA-Practice-Lab-Node-Setup-Guide]]` reuses the same image and simply references Phase 0 here.
->
 > **Key principle:** Each exam has deliberate pre-conditions (broken passwords, extra disks, wrong boot target). Set those up before starting the timer, then snapshot-revert to retake cleanly.
 
 ---
 
 ## 📊 Exam-at-a-Glance
 
-| Attribute        | Exam 1                               | Exam 2                                      |
-| ---------------- | ------------------------------------ | ------------------------------------------- |
-| VMs              | `rhel10-alpha`, `rhel10-bravo`       | `rhel10-charlie`, `rhel10-delta`            |
-| Subnet           | `192.168.100.0/24`                   | `10.20.30.0/24`                             |
-| Node IPs         | alpha `.10`, bravo `.20`             | charlie `.11`, delta `.12`                  |
-| Break-in target  | bravo (rd.break method)              | charlie (init=/bin/bash method)             |
-| Special boot     | none                                 | delta boots to `rescue.target`             |
-| Extra disks      | alpha +10G; bravo +10G, +5G          | charlie +8G, +6G, +4G; delta +8G            |
-| Tasks            | 35                                   | 35                                          |
-| Time limit       | 2.5 hrs                              | 2.5 hrs                                     |
-| Pass mark        | 25 / 35                              | 25 / 35                                     |
+| Attribute       | Exam 1                             | Exam 2                               |
+| --------------- | ---------------------------------- | ------------------------------------ |
+| VMs             | `rhel10-alpha`, `rhel10-bravo` | `rhel10-charlie`, `rhel10-delta` |
+| Subnet          | `192.168.100.0/24`               | `10.20.30.0/24`                    |
+| Node IPs        | alpha`.10`, bravo `.20`        | charlie`.11`, delta `.12`        |
+| Break-in target | bravo (rd.break method)            | charlie (init=/bin/bash method)      |
+| Special boot    | none                               | delta boots to`rescue.target`      |
+| Extra disks     | alpha +10G; bravo +10G, +5G        | charlie +8G, +6G, +4G; delta +8G     |
+| Tasks           | 35                                 | 35                                   |
+| Time limit      | 2.5 hrs                            | 2.5 hrs                              |
+| Pass mark       | 25 / 35                            | 25 / 35                              |
 
 ---
 
@@ -39,6 +35,7 @@ note: Golden image build lives here; RHCA lab guide references it downstream.
 Everything downstream — both RHCSA exams and later the entire RHCA lab — clones from a single `rhel10-golden` image. Build it once, snapshot it, never touch it again.
 
 > **Storage note:** The default libvirt pool under `/var/lib/libvirt/images` is on the root filesystem and too small for a multi-VM lab. We use the dedicated pool created on `/home` (which has the free space):
+>
 > - **Disk images pool:** `/home/libvirt/images` (libvirt pool name: `home-lab`)
 > - **ISO storage:** `/home/libvirt/iso`
 
@@ -59,34 +56,36 @@ The image pool was created yesterday. Confirm it's present and active:
 
 ```bash
 sudo virsh pool-list --all
-sudo virsh pool-info home-lab
+sudo virsh pool-info homepool
 ```
 
 If for any reason it needs to be (re)defined, here are the exact steps for both the image pool and an ISO pool:
 
 ```bash
-# Image pool (skip if 'home-lab' already exists and is active)
+# Image pool (skip if 'homepool' already exists and is active)
 sudo mkdir -p /home/libvirt/images
-sudo virsh pool-define-as home-lab dir - - - - "/home/libvirt/images"
-sudo virsh pool-build home-lab
-sudo virsh pool-start home-lab
-sudo virsh pool-autostart home-lab
+sudo virsh pool-define-as homepool dir - - - - "/home/libvirt/images"
+sudo virsh pool-build homepool
+sudo virsh pool-start homepool
+sudo virsh pool-autostart homepool
 
 # ISO pool for install media
 sudo mkdir -p /home/libvirt/iso
-sudo virsh pool-define-as iso dir - - - - "/home/libvirt/iso"
-sudo virsh pool-build iso
-sudo virsh pool-start iso
-sudo virsh pool-autostart iso
+sudo virsh pool-define-as isopool dir - - - - "/home/libvirt/iso"
+sudo virsh pool-build isopool
+sudo virsh pool-start isopool
+sudo virsh pool-autostart isopool
 ```
 
 > **SELinux note (important on /home):** libvirt's default image label context is expected under `/var/lib/libvirt/images`. When storing images under `/home`, make sure the qemu processes can access them. Either confirm the pool set the right contexts, or apply them explicitly:
+>
 > ```bash
 > # Persistent SELinux fcontext for the custom pool paths
 > sudo semanage fcontext -a -t virt_image_t '/home/libvirt/images(/.*)?'
 > sudo semanage fcontext -a -t*virt_content_t '/home/libvirt/iso(*.*)?'
 > sudo restorecon -Rv /home/libvirt
 > ```
+>
 > If you use `virt-install`/`virsh` with `security_driver = "selinux"` and hit permission denials, also verify `/home` itself is traversable by qemu (mode `0711` on the parent dirs) and that `dynamic_ownership` in `/etc/libvirt/qemu.conf` is behaving as expected.
 
 ### 0.3 — Stage the boot ISO and write the kickstart
@@ -144,13 +143,13 @@ dnf clean all
 %end
 ```
 
-### 0.4 — Install the golden VM (into the home-lab pool)
+### 0.4 — Install the golden VM (into the homepool pool)
 
 ```bash
 sudo virt-install \
   --name rhel10-golden \
   --memory 2048 --vcpus 2 \
-  --disk pool=home-lab,size=20,format=qcow2 \
+  --disk pool=homepool,size=20,format=qcow2 \
   --location /home/libvirt/iso/rhel-10-boot.iso \
   --initrd-inject /home/libvirt/images/ks/rhel10-golden.ks \
   --extra-args "inst.ks=file:/rhel10-golden.ks console=ttyS0,115200" \
@@ -442,16 +441,16 @@ Or use the Cockpit Virtual Machines UI in a browser at `https://<kvm-host>:9090`
 
 ### Suggested pacing
 
-| Phase                 | Time budget | Tasks       |
-| --------------------- | ----------- | ----------- |
-| Read-through          | 5 min       | Skim all 35 |
-| Boot/recovery + net   | 25 min      | 1–5         |
-| Users/perms/SSH       | 25 min      | 6–12        |
-| Software management   | 15 min      | 13–15       |
-| Storage (heaviest)    | 35 min      | 16–24       |
-| Services/logging/time | 20 min      | 25–29       |
-| Scripting             | 10 min      | 30–32       |
-| SELinux + containers  | 10 min      | 33–35       |
+| Phase                 | Time budget | Tasks                     |
+| --------------------- | ----------- | ------------------------- |
+| Read-through          | 5 min       | Skim all 35               |
+| Boot/recovery + net   | 25 min      | 1–5                      |
+| Users/perms/SSH       | 25 min      | 6–12                     |
+| Software management   | 15 min      | 13–15                    |
+| Storage (heaviest)    | 35 min      | 16–24                    |
+| Services/logging/time | 20 min      | 25–29                    |
+| Scripting             | 10 min      | 30–32                    |
+| SELinux + containers  | 10 min      | 33–35                    |
 | Reserve / verify      | 5 min       | Final reboot + spot-check |
 
 ---
@@ -616,17 +615,17 @@ echo "== DONE. Both exam environments ready. =="
 
 ## 🚨 TROUBLESHOOTING
 
-| Symptom                                        | Cause / Fix                                                            |
-| ---------------------------------------------- | ---------------------------------------------------------------------- |
-| Disks show as `/dev/vdb` not `/dev/sdb`        | Used virtio bus. Re-attach with SATA bus, or adapt the task text       |
-| delta boots to multi-user, not rescue          | `set-default rescue.target` did not apply — re-run the virt-customize step |
-| Cannot break into bravo/charlie                | Password was not scrambled — re-run with a fresh `openssl rand`         |
-| Both exams' VMs see each other                 | Wrong network — alpha/bravo on `rhcsa-net1`, charlie/delta on `rhcsa-net2` |
-| `snapshot-revert` fails: domain running        | Run `virsh destroy <vm>` first, then revert                            |
-| Static IP task breaks SSH access               | Expected — use `virsh console` until the network task is done          |
-| Reboot test wipes a completed task             | The task was not made persistent — redo it correctly                   |
-| GRUB edit will not accept the break-in args    | Press `e` at the boot menu, edit the `linux` line, then `Ctrl+X`       |
-| Extra disks missing after revert               | Snapshot was taken before disks attached — re-take the exam-ready snapshot |
+| Symptom                                     | Cause / Fix                                                                    |
+| ------------------------------------------- | ------------------------------------------------------------------------------ |
+| Disks show as`/dev/vdb` not `/dev/sdb`  | Used virtio bus. Re-attach with SATA bus, or adapt the task text               |
+| delta boots to multi-user, not rescue       | `set-default rescue.target` did not apply — re-run the virt-customize step  |
+| Cannot break into bravo/charlie             | Password was not scrambled — re-run with a fresh`openssl rand`              |
+| Both exams' VMs see each other              | Wrong network — alpha/bravo on`rhcsa-net1`, charlie/delta on `rhcsa-net2` |
+| `snapshot-revert` fails: domain running   | Run`virsh destroy <vm>` first, then revert                                   |
+| Static IP task breaks SSH access            | Expected — use`virsh console` until the network task is done                |
+| Reboot test wipes a completed task          | The task was not made persistent — redo it correctly                          |
+| GRUB edit will not accept the break-in args | Press`e` at the boot menu, edit the `linux` line, then `Ctrl+X`          |
+| Extra disks missing after revert            | Snapshot was taken before disks attached — re-take the exam-ready snapshot    |
 
 ---
 
