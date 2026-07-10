@@ -44,7 +44,8 @@ Everything downstream — both RHCSA exams and later the entire RHCA lab — clo
 ```bash
 sudo dnf group install -y "Virtualization Host"
 sudo dnf install -y qemu-kvm libvirt virt-install virt-manager \
-                    cockpit-machines libguestfs-tools virt-viewer
+                    cockpit-machines libguestfs-tools virt-viewer \
+                    guestfs-tools
 sudo systemctl enable --now libvirtd
 sudo usermod -aG libvirt "$USER"
 newgrp libvirt
@@ -82,7 +83,7 @@ sudo virsh pool-autostart isopool
 > ```bash
 > # Persistent SELinux fcontext for the custom pool paths
 > sudo semanage fcontext -a -t virt_image_t '/home/libvirt/images(/.*)?'
-> sudo semanage fcontext -a -t*virt_content_t '/home/libvirt/iso(*.*)?'
+> sudo semanage fcontext -a -t virt_content_t '/home/libvirt/iso(/.*)?'
 > sudo restorecon -Rv /home/libvirt
 > ```
 >
@@ -153,7 +154,7 @@ sudo virt-install \
   --location /home/libvirt/iso/rhel-10.1-x86_64-boot.iso \
   --initrd-inject /home/libvirt/images/ks/rhel10-golden.ks \
   --extra-args "inst.ks=file:/rhel10-golden.ks console=ttyS0,115200" \
-  --os-variant rhel10.1 \
+  --os-variant rhel10.0 \
   --network network=default \
   --graphics none \
   --console pty,target_type=serial \
@@ -187,7 +188,7 @@ sudo virsh snapshot-create-as rhel10-golden clean-baseline \
 sudo virsh snapshot-list rhel10-golden
 ```
 
-You now have a reusable base. Every exam VM is a clone of this.
+ \You now have a reusable base. Every exam VM is a clone of this.
 
 ---
 
@@ -242,25 +243,23 @@ sudo virsh net-list --all
 Both exams need multiple raw disks attached unpartitioned. Save as `/usr/local/bin/add-disk.sh`:
 
 ```bash
-#!/usr/bin/env bash
+#!usr/bin/env bash
 set -euo pipefail
 VM="${1:?usage: add-disk.sh <vm> <target-dev> <size-GB>}"
 DEV="${2:?e.g. sdb}"
 SIZE="${3:?e.g. 10}"
 
-IMG="/var/lib/libvirt/lab-images/${VM}-${DEV}.qcow2"
+IMG="/home/libvirt/images/${VM}-${DEV}.qcow2"
 echo "Creating ${SIZE}G disk for ${VM} as ${DEV}"
 sudo qemu-img create -f qcow2 "${IMG}" "${SIZE}G"
 sudo virsh attach-disk "${VM}" "${IMG}" "${DEV}" \
-  --persistent --subdriver qcow2 --targetbus sata
+  --persistent --subdriver qcow2 --targetbus virtio
 echo "Attached. Inside the VM it appears as /dev/${DEV}."
 ```
 
 ```bash
-sudo chmod +x /usr/local/bin/add-disk.sh
+sudo chmod +x ~/my_work_tools/bin/bash/add-disk.sh
 ```
-
-> Using the SATA bus makes disks appear as `/dev/sdb`, `/dev/sdc`, `/dev/sdd` — matching the exam text exactly. With virtio they would appear as `/dev/vdb` and so on.
 
 ---
 
@@ -270,10 +269,10 @@ sudo chmod +x /usr/local/bin/add-disk.sh
 
 ```bash
 sudo virt-clone --original rhel10-golden --name rhel10-alpha \
-  --file /var/lib/libvirt/lab-images/rhel10-alpha.qcow2
+  --file /home/libvirt/images/rhel10-alpha.qcow2
 
 sudo virt-clone --original rhel10-golden --name rhel10-bravo \
-  --file /var/lib/libvirt/lab-images/rhel10-bravo.qcow2
+  --file /home/libvirt/images/rhel10-bravo.qcow2
 ```
 
 ### 3.2 — Attach the Exam 1 network
@@ -303,12 +302,12 @@ sudo virt-customize -d rhel10-bravo --hostname rhel10-bravo
 ### 3.4 — Attach extra disks
 
 ```bash
-sudo /usr/local/bin/add-disk.sh rhel10-alpha sdb 10
-sudo /usr/local/bin/add-disk.sh rhel10-bravo sdb 10
-sudo /usr/local/bin/add-disk.sh rhel10-bravo sdc 5
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-alpha vdb 10
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo vdb 10
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo vdc 5
 ```
 
-> Storage tasks (16–20) target bravo `/dev/sdb` and `/dev/sdc`. Alpha's extra disk is optional. Leave all disks unpartitioned.
+> Storage tasks (16–20) target bravo `/dev/vdb` and `/dev/vdc`. Alpha's extra disk is optional. Leave all disks unpartitioned.
 
 ### 3.5 — Seed the break-in condition on bravo
 
@@ -375,10 +374,10 @@ sudo virt-customize -d rhel10-delta   --hostname rhel10-delta
 ### 4.4 — Attach extra disks
 
 ```bash
-sudo /usr/local/bin/add-disk.sh rhel10-charlie sdb 8
-sudo /usr/local/bin/add-disk.sh rhel10-charlie sdc 6
-sudo /usr/local/bin/add-disk.sh rhel10-charlie sdd 4
-sudo /usr/local/bin/add-disk.sh rhel10-delta   sdb 8
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdb 8
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdc 6
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdd 4
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-delta   sdb 8
 ```
 
 ### 4.5 — Seed the break-in condition on charlie
@@ -584,13 +583,13 @@ sudo virt-customize -d rhel10-charlie --hostname rhel10-charlie
 sudo virt-customize -d rhel10-delta   --hostname rhel10-delta
 
 echo "== Disks =="
-sudo /usr/local/bin/add-disk.sh rhel10-alpha   sdb 10
-sudo /usr/local/bin/add-disk.sh rhel10-bravo   sdb 10
-sudo /usr/local/bin/add-disk.sh rhel10-bravo   sdc 5
-sudo /usr/local/bin/add-disk.sh rhel10-charlie sdb 8
-sudo /usr/local/bin/add-disk.sh rhel10-charlie sdc 6
-sudo /usr/local/bin/add-disk.sh rhel10-charlie sdd 4
-sudo /usr/local/bin/add-disk.sh rhel10-delta   sdb 8
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-alpha   sdb 10
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo   sdb 10
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo   sdc 5
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdb 8
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdc 6
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdd 4
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-delta   sdb 8
 
 echo "== Seeding exam pre-conditions =="
 sudo virt-customize -d rhel10-bravo   --root-password "password:$(openssl rand -base64 24)"
