@@ -38,6 +38,10 @@ note: Golden image build lives here; RHCA lab guide references it downstream.
 
 Everything downstream — both RHCSA exams and later the entire RHCA lab — clones from a single `rhel10-golden` image. Build it once, snapshot it, never touch it again.
 
+> **Storage note:** The default libvirt pool under `/var/lib/libvirt/images` is on the root filesystem and too small for a multi-VM lab. We use the dedicated pool created on `/home` (which has the free space):
+> - **Disk images pool:** `/home/libvirt/images` (libvirt pool name: `home-lab`)
+> - **ISO storage:** `/home/libvirt/iso`
+
 ### 0.1 — Install the virtualization stack on the KVM host
 
 ```bash
@@ -49,19 +53,52 @@ sudo usermod -aG libvirt "$USER"
 newgrp libvirt
 ```
 
-### 0.2 — Create a dedicated storage pool
+### 0.2 — Verify (or create) the storage pools on /home
+
+The image pool was created yesterday. Confirm it's present and active:
 
 ```bash
-sudo mkdir -p /var/lib/libvirt/lab-images
-sudo virsh pool-define-as lab dir - - - - "/var/lib/libvirt/lab-images"
-sudo virsh pool-build lab
-sudo virsh pool-start lab
-sudo virsh pool-autostart lab
+sudo virsh pool-list --all
+sudo virsh pool-info home-lab
 ```
 
-### 0.3 — Write the kickstart file
+If for any reason it needs to be (re)defined, here are the exact steps for both the image pool and an ISO pool:
 
-Place the boot ISO at `/var/lib/libvirt/isos/rhel-10-boot.iso`, then create `/var/lib/libvirt/lab-images/ks/rhel10-golden.ks`:
+```bash
+# Image pool (skip if 'home-lab' already exists and is active)
+sudo mkdir -p /home/libvirt/images
+sudo virsh pool-define-as home-lab dir - - - - "/home/libvirt/images"
+sudo virsh pool-build home-lab
+sudo virsh pool-start home-lab
+sudo virsh pool-autostart home-lab
+
+# ISO pool for install media
+sudo mkdir -p /home/libvirt/iso
+sudo virsh pool-define-as iso dir - - - - "/home/libvirt/iso"
+sudo virsh pool-build iso
+sudo virsh pool-start iso
+sudo virsh pool-autostart iso
+```
+
+> **SELinux note (important on /home):** libvirt's default image label context is expected under `/var/lib/libvirt/images`. When storing images under `/home`, make sure the qemu processes can access them. Either confirm the pool set the right contexts, or apply them explicitly:
+> ```bash
+> # Persistent SELinux fcontext for the custom pool paths
+> sudo semanage fcontext -a -t virt_image_t '/home/libvirt/images(/.*)?'
+> sudo semanage fcontext -a -t*virt_content_t '/home/libvirt/iso(*.*)?'
+> sudo restorecon -Rv /home/libvirt
+> ```
+> If you use `virt-install`/`virsh` with `security_driver = "selinux"` and hit permission denials, also verify `/home` itself is traversable by qemu (mode `0711` on the parent dirs) and that `dynamic_ownership` in `/etc/libvirt/qemu.conf` is behaving as expected.
+
+### 0.3 — Stage the boot ISO and write the kickstart
+
+Place the RHEL 10 boot ISO in the ISO pool at `/home/libvirt/iso/rhel-10-boot.iso`, then create the kickstart in the image pool tree:
+
+```bash
+sudo mkdir -p /home/libvirt/images/ks
+sudo vim /home/libvirt/images/ks/rhel10-golden.ks
+```
+
+Kickstart contents:
 
 ```text
 #version=RHEL10
@@ -107,15 +144,15 @@ dnf clean all
 %end
 ```
 
-### 0.4 — Install the golden VM
+### 0.4 — Install the golden VM (into the home-lab pool)
 
 ```bash
 sudo virt-install \
   --name rhel10-golden \
   --memory 2048 --vcpus 2 \
-  --disk pool=lab,size=20,format=qcow2 \
-  --location /var/lib/libvirt/isos/rhel-10-boot.iso \
-  --initrd-inject /var/lib/libvirt/lab-images/ks/rhel10-golden.ks \
+  --disk pool=home-lab,size=20,format=qcow2 \
+  --location /home/libvirt/iso/rhel-10-boot.iso \
+  --initrd-inject /home/libvirt/images/ks/rhel10-golden.ks \
   --extra-args "inst.ks=file:/rhel10-golden.ks console=ttyS0,115200" \
   --os-variant rhel10.0 \
   --network network=default \
@@ -131,8 +168,6 @@ sudo virsh console rhel10-golden
 ```
 
 ### 0.5 — Update and install the guest agent
-
-After first boot, log in and finalize:
 
 ```bash
 sudo dnf upgrade -y
