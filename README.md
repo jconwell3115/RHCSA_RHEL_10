@@ -150,10 +150,10 @@ sudo virt-install \
   --name rhel10-golden \
   --memory 2048 --vcpus 2 \
   --disk pool=homepool,size=20,format=qcow2 \
-  --location /home/libvirt/iso/rhel-10-boot.iso \
+  --location /home/libvirt/iso/rhel-10.1-x86_64-boot.iso \
   --initrd-inject /home/libvirt/images/ks/rhel10-golden.ks \
   --extra-args "inst.ks=file:/rhel10-golden.ks console=ttyS0,115200" \
-  --os-variant rhel10.0 \
+  --os-variant rhel10.1 \
   --network network=default \
   --graphics none \
   --console pty,target_type=serial \
