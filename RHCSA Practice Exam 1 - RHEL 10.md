@@ -3,7 +3,6 @@ title: RHCSA Practice Exam - RHEL 10
 tags: [certifications, rhcsa, rhel10, practice, linux]
 created: 2026-05-12
 ---
-
 # 🧪 RHCSA Practice Exam — RHEL 10 (EX200)
 
 > **Format:** Performance-based | **Time Limit:** 2.5 hours | **Pass Score:** ~70%
@@ -18,10 +17,10 @@ created: 2026-05-12
 
 ### Required Virtual Machines
 
-| VM | vCPU | RAM | Primary Disk | Extra Disks |
-|----|------|-----|--------------|-------------|
-| `rhel10-alpha` | 2 | 2 GB | 20 GB `/dev/sda` | none (add 10 GB `/dev/sdb` after setup) |
-| `rhel10-bravo` | 2 | 2 GB | 20 GB `/dev/sda` | 10 GB `/dev/sdb`, 5 GB `/dev/sdc` |
+| VM               | vCPU | RAM  | Primary Disk      | Extra Disks                              |
+| ---------------- | ---- | ---- | ----------------- | ---------------------------------------- |
+| `rhel10-alpha` | 2    | 2 GB | 20 GB`/dev/vda` | none (add 10 GB`/dev/vdb` after setup) |
+| `rhel10-bravo` | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`, 5 GB `/dev/vdc`     |
 
 ### VM Configuration Notes
 
@@ -37,6 +36,7 @@ created: 2026-05-12
 ### Repo Setup (Pre-Task — Simulates Exam Environment)
 
 The real exam has repos pre-configured or gives you a URL. For lab purposes, either:
+
 - Subscribe with a Red Hat Developer account: `subscription-manager register`
 - Or mount the RHEL 10 ISO and configure a local repo (covered in Task 9)
 
@@ -65,9 +65,11 @@ Read carefully before beginning:
 
 > Objective: Interrupt the boot process in order to gain access to a system
 
-The root password on `rhel10-bravo` is unknown. Break into the system using the `rd.break` method, reset the root password to `RedHat10!`, and ensure SELinux labels are updated before the next boot. Reboot and confirm login.
+The root password on `rhel10-bravo` is unknown. Break into the system using the `init=/bin/bash` method, reset the root password to `RedHat10!`, and ensure SELinux labels are updated before the next boot. Reboot and confirm login.
 
-**Hint:** `rd.break`, `mount -o remount,rw /sysroot`, `chroot /sysroot`, `passwd`, `touch /.autorelabel`
+> rd.break is no longer a valid breakin method, it drops to an emergency mode not shell.  init=/bin/bash is the only method
+
+**Hint:** `init=/bin/bash`, `mount -o remount,rw /`, `passwd root`, `touch /.autorelabel`, `exec /sbin/reboot -f`
 
 ---
 
@@ -89,6 +91,7 @@ systemctl set-default multi-user.target
 > Objective: Modify the system bootloader
 
 Edit the GRUB configuration on `rhel10-alpha` with the following changes:
+
 - Set `GRUB_TIMEOUT=10`
 - Add the line: `GRUB_TIMEOUT_STYLE=countdown`
 - Append `quiet` to the end of `GRUB_CMDLINE_LINUX`
@@ -114,15 +117,18 @@ grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg  # UEFI
 
 Configure the following on each server using `nmcli`. Configurations must survive reboot.
 
-| Host | Hostname | IPv4 | IPv6 | Gateway |
-|------|----------|------|------|---------|
+| Host  | Hostname            | IPv4                  | IPv6            | Gateway           |
+| ----- | ------------------- | --------------------- | --------------- | ----------------- |
 | alpha | `alpha.lab.local` | `192.168.100.10/24` | `fd00::10/64` | `192.168.100.1` |
 | bravo | `bravo.lab.local` | `192.168.100.20/24` | `fd00::20/64` | `192.168.100.1` |
 
 Add entries for both hosts to `/etc/hosts` on both systems. Confirm connectivity between nodes by hostname.
 
 ```bash
+nmcli con show # get interface name
+sudo nmcli con add type thernet ifname "interface-name" con-name "connection-name"
 nmcli con mod "connection-name" ipv4.addresses 192.168.100.10/24 ipv4.gateway 192.168.100.1 ipv4.method manual
+nmcli con mod "connection-name" ipv4.dns "8.8.8.8 1.1.1.1"
 nmcli con mod "connection-name" ipv6.addresses fd00::10/64 ipv6.method manual
 nmcli con up "connection-name"
 hostnamectl set-hostname alpha.lab.local
@@ -135,6 +141,7 @@ hostnamectl set-hostname alpha.lab.local
 > Objective: Restrict network access using firewall-cmd/firewalld
 
 On `alpha`:
+
 - Ensure `sshd` is permanently allowed in the `public` zone
 - Permanently allow HTTP traffic (port 80/tcp) in the `public` zone
 - Add a runtime-only rule allowing port `8080/tcp`
@@ -148,6 +155,7 @@ firewall-cmd --add-port=8080/tcp
 firewall-cmd --permanent --zone=internal --add-port=5900-5910/tcp
 firewall-cmd --reload
 firewall-cmd --list-all
+firewall-cmd --zone=internal --list-all
 ```
 
 ---
@@ -184,9 +192,13 @@ Verify each user's entry in `/etc/passwd` and group memberships with `id`.
 > Objective: Change passwords and adjust password aging for local user accounts
 
 - Set the password for all users created in Task 6 to `Lab@12345`
+  - `for user in alice bob carol dave; do echo "${user}:Lab@12345"; done | sudo chpasswd`
 - Using `chage`, configure `alice` with: minimum 7 days, maximum 60 days, warn 10 days
+  - `sudo chage alice -m 7 -M 60 -W 10`
 - Using `passwd`, configure `bob` with: minimum 5 days, maximum 90 days, warn 14 days, inactive 10 days
+  - `sudo passwd bob -n 5 -x 90 -w 14 -i 10`
 - Force `carol` to change her password on next login
+  - `sudo chage carol -d 0`qq
 - Set system-wide minimum password length to 8 characters in `/etc/login.defs`
 
 ---
@@ -196,6 +208,7 @@ Verify each user's entry in `/etc/passwd` and group memberships with `id`.
 > Objective: Configure privileged access
 
 Create a sudoers drop-in file in `/etc/sudoers.d/`. Configure:
+
 - `sysadmins` group: full sudo access with no password
 - `developers` group: can run `dnf` and `systemctl` with sudo
 - `alice`: can run `/usr/sbin/useradd` and `/usr/sbin/userdel` only
@@ -210,6 +223,7 @@ Validate using `sudo -l -U alice`.
 > Objective: Create and configure set-GID directories for collaboration
 
 Create a shared directory `/data/devshare`:
+
 - Owned by `alice:developers`
 - Permissions: owner=rwx, group=rwx, other=no access
 - Set the **set-GID** bit so new files inherit the `developers` group
@@ -248,11 +262,13 @@ umask 0007
 > Objective: Configure key-based authentication for SSH, Access remote systems using SSH
 
 On `alpha` as `root`:
+
 1. Generate an RSA key pair (4096-bit, no passphrase)
 2. Copy the public key to `root@bravo`
 3. Confirm passwordless SSH from alpha to bravo
 
 On `alpha` as `alice`:
+
 1. Generate an ed25519 key pair
 2. Copy the public key to `alice@bravo` (create alice on bravo if needed)
 3. Confirm passwordless SSH from alice@alpha to alice@bravo
@@ -337,21 +353,22 @@ dnf module reset postgresql
 
 ### SECTION 6: Storage — Partitions, LVM & Swap
 
-> **Note:** These tasks use the extra disk `/dev/sdb` on bravo (or alpha if you added one)
+> **Note:** These tasks use the extra disk `/dev/vdb` on bravo (or alpha if you added one)
 
 ---
 
-**Task 16 — Create GPT Partitions** *(bravo, /dev/sdb)*
+**Task 16 — Create GPT Partitions** *(bravo, /dev/vdb)*
 
 > Objective: List, create, delete partitions on GPT disks
 
-Using `/dev/sdb` on bravo:
+Using `/dev/vdb` on bravo:
+
 1. Create a GPT partition table
-2. Create a 1 GiB partition (`sdb1`) — type: Linux filesystem
-3. Create a 500 MiB partition (`sdb2`) — type: Linux swap
-4. Create a 2 GiB partition (`sdb3`) — type: Linux filesystem
+2. Create a 1 GiB partition (`vdb1`) — type: Linux filesystem
+3. Create a 500 MiB partition (`vdb2`) — type: Linux swap
+4. Create a 2 GiB partition (`vdb3`) — type: Linux filesystem
 5. Run `partprobe` to inform the kernel
-6. Verify with `lsblk` and `fdisk -l /dev/sdb`
+6. Verify with `lsblk` and `fdisk -l /dev/vdb`
 
 ---
 
@@ -359,8 +376,8 @@ Using `/dev/sdb` on bravo:
 
 > Objective: Configure systems to mount file systems at boot by UUID or label, Create/mount/unmount VFAT, ext4, XFS
 
-1. Format `sdb1` as **XFS**
-2. Format `sdb3` as **ext4** with label `DATASTORE`
+1. Format `vdb1` as **XFS**
+2. Format `vdb3` as **ext4** with label `DATASTORE`
 3. Create mount points `/mnt/xfs_data` and `/mnt/ext4_data`
 4. Add persistent entries to `/etc/fstab` using **UUID** for xfs_data and **LABEL** for ext4_data
 5. Run `mount -a` and verify with `df -hT`
@@ -372,19 +389,19 @@ Using `/dev/sdb` on bravo:
 
 > Objective: Add new partitions, logical volumes, and swap to a system non-destructively
 
-1. Format `sdb2` as swap with label `EXTRASWAP`
+1. Format `vdb2` as swap with label `EXTRASWAP`
 2. Add a persistent swap entry to `/etc/fstab` with priority `10`
 3. Activate the swap and verify with `swapon -s` and `free -h`
 
 ---
 
-**Task 19 — Create and Manage LVM** *(bravo, /dev/sdc)*
+**Task 19 — Create and Manage LVM** *(bravo, /dev/vdc)*
 
 > Objective: Create/remove physical volumes, assign to VGs, create/delete LVs
 
-Using `/dev/sdc` (full disk, unpartitioned):
+Using `/dev/vdc` (full disk, unpartitioned):
 
-1. Initialize `/dev/sdc` as a physical volume
+1. Initialize `/dev/vdc` as a physical volume
 2. Create a volume group `vg_lab` with PE size 16 MiB
 3. Create logical volume `lv_data` with size **500 MiB**
 4. Create logical volume `lv_logs` using **25 extents**
@@ -399,6 +416,7 @@ Using `/dev/sdc` (full disk, unpartitioned):
 > Objective: Extend existing logical volumes, Add new partitions and LVs non-destructively
 
 Extend the `lv_data` logical volume (from Task 19) to **1 GiB** total size:
+
 1. Verify there is enough free space in `vg_lab`
 2. Extend the LV and grow the filesystem in one command
 3. Confirm the new size with `df -h /mnt/lv_data`
@@ -418,6 +436,7 @@ lvextend -L 1G -r /dev/vg_lab/lv_data
 > Objective: Mount and unmount network file systems using NFS
 
 On `bravo` (NFS server):
+
 1. Install `nfs-utils`
 2. Create directories `/export/shared` and `/export/readonly`
 3. Add entries to `/etc/exports`:
@@ -434,6 +453,7 @@ On `bravo` (NFS server):
 > Objective: Mount and unmount network file systems using NFS
 
 On `alpha` (NFS client):
+
 1. Create mount points `/mnt/nfs_shared` and `/mnt/nfs_ro`
 2. Mount them using NFS entries in `/etc/fstab` with the `_netdev` option
 3. Verify with `mount -a` and `df -hT`
@@ -574,6 +594,7 @@ Storage=persistent
 > Objective: Conditionally execute code (if, test, [], etc.), Process script inputs ($1, $2, etc.)
 
 Write a script `/usr/local/bin/syscheck.sh` that:
+
 - Accepts one argument: `cpu`, `mem`, `disk`, or `all`
 - If `cpu`: display CPU model from `/proc/cpuinfo`
 - If `mem`: display total and available memory from `free -h`
@@ -589,6 +610,7 @@ Write a script `/usr/local/bin/syscheck.sh` that:
 > Objective: Use looping constructs (for, etc.), Processing output of shell commands within a script
 
 Write a script `/usr/local/bin/bulk_users.sh` that:
+
 - Reads usernames from `/root/userlist.txt` (create this file with 5 usernames)
 - For each username:
   - Create the user if it does not already exist
@@ -612,6 +634,7 @@ testuser5
 > Objective: Process output of shell commands within a script
 
 Write a script `/root/etcbackup.sh` that:
+
 - Creates a compressed tar archive of `/etc` named with the current date: `etc_backup_YYYY-MM-DD.tar.gz`
 - Saves it to `/root/backups/` (create if not exists)
 - Removes backups older than 7 days
@@ -714,43 +737,43 @@ WantedBy=default.target
 
 Mark each task after verifying it survives a reboot where applicable.
 
-| # | Task | Reboot Test | Done |
-|---|------|-------------|------|
-| 1 | Break into bravo, reset root password | ✓ | [ ] |
-| 2 | Set default boot target to multi-user | ✓ | [ ] |
-| 3 | Modify bootloader (GRUB_TIMEOUT, quiet) | ✓ | [ ] |
-| 4 | Static IP + IPv6 + hostname + /etc/hosts | ✓ | [ ] |
-| 5 | Firewall rules (SSH, HTTP, ports) | ✓ | [ ] |
-| 6 | Create users/groups with UIDs/GIDs | ✓ | [ ] |
-| 7 | Password aging policies | ✓ | [ ] |
-| 8 | sudo access (groups, command alias) | ✓ | [ ] |
-| 9 | Set-GID collaborative directory | ✓ | [ ] |
-| 10 | System-wide umask 0007 | ✓ | [ ] |
-| 11 | Key-based SSH (root + alice) | ✓ | [ ] |
-| 12 | scp, rsync, sftp transfers | — | [ ] |
-| 13 | Configure local DNF repo from ISO | ✓ | [ ] |
-| 14 | Package install/remove/query with RPM+DNF | — | [ ] |
-| 15 | DNF module stream management | — | [ ] |
-| 16 | GPT partitions on /dev/sdb | ✓ | [ ] |
-| 17 | Format + mount by UUID and LABEL | ✓ | [ ] |
-| 18 | Swap partition with priority | ✓ | [ ] |
-| 19 | Create LVM (PV, VG, LV) with PE size | ✓ | [ ] |
-| 20 | Extend LV and grow filesystem live | ✓ | [ ] |
-| 21 | NFS server with exports + firewall | ✓ | [ ] |
-| 22 | NFS client persistent mount | ✓ | [ ] |
-| 23 | AutoFS (direct map + indirect home dirs) | ✓ | [ ] |
-| 24 | File permission diagnostics + fix | ✓ | [ ] |
-| 25 | Chrony NTP + timezone | ✓ | [ ] |
-| 26 | Tuned profile + custom merged profile | ✓ | [ ] |
-| 27 | Process management (nice/renice/kill) | — | [ ] |
-| 28 | Persistent journal + rsyslog rule | ✓ | [ ] |
-| 29 | at + cron + systemd timer | ✓ | [ ] |
-| 30 | Conditional shell script (syscheck.sh) | — | [ ] |
-| 31 | Looping user creation script | — | [ ] |
-| 32 | Backup script + cron job | ✓ | [ ] |
-| 33 | SELinux modes + fcontext + restorecon | ✓ | [ ] |
-| 34 | SELinux ports + booleans | ✓ | [ ] |
-| 35 | Podman container + Quadlet service | ✓ | [ ] |
+| #  | Task                                      | Reboot Test | Done |
+| -- | ----------------------------------------- | ----------- | ---- |
+| 1  | Break into bravo, reset root password     | ✓          | [ ]  |
+| 2  | Set default boot target to multi-user     | ✓          | [ ]  |
+| 3  | Modify bootloader (GRUB_TIMEOUT, quiet)   | ✓          | [ ]  |
+| 4  | Static IP + IPv6 + hostname + /etc/hosts  | ✓          | [ ]  |
+| 5  | Firewall rules (SSH, HTTP, ports)         | ✓          | [ ]  |
+| 6  | Create users/groups with UIDs/GIDs        | ✓          | [ ]  |
+| 7  | Password aging policies                   | ✓          | [ ]  |
+| 8  | sudo access (groups, command alias)       | ✓          | [ ]  |
+| 9  | Set-GID collaborative directory           | ✓          | [ ]  |
+| 10 | System-wide umask 0007                    | ✓          | [ ]  |
+| 11 | Key-based SSH (root + alice)              | ✓          | [ ]  |
+| 12 | scp, rsync, sftp transfers                | —          | [ ]  |
+| 13 | Configure local DNF repo from ISO         | ✓          | [ ]  |
+| 14 | Package install/remove/query with RPM+DNF | —          | [ ]  |
+| 15 | DNF module stream management              | —          | [ ]  |
+| 16 | GPT partitions on /dev/vdb                | ✓          | [ ]  |
+| 17 | Format + mount by UUID and LABEL          | ✓          | [ ]  |
+| 18 | Swap partition with priority              | ✓          | [ ]  |
+| 19 | Create LVM (PV, VG, LV) with PE size      | ✓          | [ ]  |
+| 20 | Extend LV and grow filesystem live        | ✓          | [ ]  |
+| 21 | NFS server with exports + firewall        | ✓          | [ ]  |
+| 22 | NFS client persistent mount               | ✓          | [ ]  |
+| 23 | AutoFS (direct map + indirect home dirs)  | ✓          | [ ]  |
+| 24 | File permission diagnostics + fix         | ✓          | [ ]  |
+| 25 | Chrony NTP + timezone                     | ✓          | [ ]  |
+| 26 | Tuned profile + custom merged profile     | ✓          | [ ]  |
+| 27 | Process management (nice/renice/kill)     | —          | [ ]  |
+| 28 | Persistent journal + rsyslog rule         | ✓          | [ ]  |
+| 29 | at + cron + systemd timer                 | ✓          | [ ]  |
+| 30 | Conditional shell script (syscheck.sh)    | —          | [ ]  |
+| 31 | Looping user creation script              | —          | [ ]  |
+| 32 | Backup script + cron job                  | ✓          | [ ]  |
+| 33 | SELinux modes + fcontext + restorecon     | ✓          | [ ]  |
+| 34 | SELinux ports + booleans                  | ✓          | [ ]  |
+| 35 | Podman container + Quadlet service        | ✓          | [ ]  |
 
 **Score: ___ / 35**
 
@@ -761,6 +784,7 @@ Mark each task after verifying it survives a reboot where applicable.
 ## 🔑 Key Commands Quick Reference
 
 ### Storage
+
 ```bash
 lsblk / fdisk / gdisk / parted
 pvcreate / vgcreate / lvcreate / lvextend -r
@@ -770,6 +794,7 @@ mount -a  # test fstab
 ```
 
 ### SELinux
+
 ```bash
 getenforce / setenforce / sestatus
 ls -Z / ps -Z
@@ -782,6 +807,7 @@ ausearch -m avc -ts recent   # check denials
 ```
 
 ### Containers (RHEL 10 — Quadlets)
+
 ```bash
 podman pull / run / ps / stop / rm / rmi
 podman inspect IMAGE
@@ -793,6 +819,7 @@ loginctl enable-linger USERNAME
 ```
 
 ### Systemd
+
 ```bash
 systemctl list-units --type=service
 systemctl status/start/stop/enable/disable
@@ -806,16 +833,16 @@ systemctl get-default / set-default
 
 Based on your current objective tracker, focus on:
 
-| Priority  | Topic                                  | Resource                                                                                    |
-| --------- | -------------------------------------- | ------------------------------------------------------------------------------------------- |
-| 🔴 High   | Storage (LVM, partitions, filesystems) | `man lvm`, `man fstab`, Sander van Vugt RHCSA 9                                             |
-| 🔴 High   | SELinux                                | `man semanage`, `man restorecon`, audit2why                                                 |
-| 🔴 High   | Users/Groups/sudo                      | `man useradd`, `man sudoers`, `man chage`                                                   |
-| 🟡 Medium | Shell scripting                        | GNU Bash manual, `man test`                                                                 |
-| 🟡 Medium | NFS + AutoFS                           | `man exports`, `man auto.master`                                                            |
+| Priority  | Topic                                  | Resource                                                                                   |
+| --------- | -------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 🔴 High   | Storage (LVM, partitions, filesystems) | `man lvm`, `man fstab`, Sander van Vugt RHCSA 9                                        |
+| 🔴 High   | SELinux                                | `man semanage`, `man restorecon`, audit2why                                            |
+| 🔴 High   | Users/Groups/sudo                      | `man useradd`, `man sudoers`, `man chage`                                            |
+| 🟡 Medium | Shell scripting                        | GNU Bash manual,`man test`                                                               |
+| 🟡 Medium | NFS + AutoFS                           | `man exports`, `man auto.master`                                                       |
 | 🟡 Medium | Containers (Quadlets)                  | [Podman Quadlet Docs](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) |
-| 🟢 Lower  | Networking/firewalld                   | `man nmcli`, `man firewall-cmd`                                                             |
-|           |                                        |                                                                                             |
+| 🟢 Lower  | Networking/firewalld                   | `man nmcli`, `man firewall-cmd`                                                        |
+|           |                                        |                                                                                            |
 
 ---
 
