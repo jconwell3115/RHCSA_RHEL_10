@@ -273,7 +273,7 @@ On `alpha` as `alice`:
 2. Copy the public key to `alice@bravo` (create alice on bravo if needed)
 3. Confirm passwordless SSH from alice@alpha to alice@bravo
 
-Ensure `PermitRootLogin yes` is set in `/etc/ssh/sshd_config` on bravo.
+Ensure `PermitRootLogin yes` & `PasswordAuthentication yes` is set in `/etc/ssh/sshd_config` on bravo.
 
 ---
 
