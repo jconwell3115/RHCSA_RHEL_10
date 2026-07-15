@@ -1,3 +1,4 @@
+
 ---
 title: RHCSA Practice Exam - RHEL 10
 tags: [certifications, rhcsa, rhel10, practice, linux]
@@ -291,6 +292,17 @@ Ensure `PermitRootLogin yes` & `PasswordAuthentication yes` is set in `/etc/ssh/
 
 ---
 
+> If the VM was registered with Red hat disable the builtin repos before continuing
+
+```bash
+sudo subscription-manager repos --disable=rhel-10-for-x86_64-baseos-rpms
+sudo subscription-manager repos --disable=rhel-10-for-x86_64-appstream-rpms
+
+# Clean and Verify
+sudo dnf clean all
+dnf repolist
+```
+
 **Task 13 — Configure Repositories** *(alpha)*
 
 > Objective: Install and update software packages from Red Hat CDN, remote repo, or local file system
@@ -303,8 +315,6 @@ Configure a local YUM/DNF repository from the RHEL 10 installation ISO:
    - `[AppStream]` section pointing to `file:///mnt/rhel10iso/AppStream`
    - Both enabled, `gpgcheck=0`
 3. Verify with `dnf repolist`
-
-Then (if connected): also add the EPEL repository for RHEL 10.
 
 ---
 
@@ -321,33 +331,63 @@ Then (if connected): also add the EPEL repository for RHEL 10.
 - Remove `nmap` with `rpm`
 
 ```bash
-dnf install vim-enhanced tmux wget httpd -y
+sudo dnf install vim-enhanced tmux wget httpd -y
 rpm -qc httpd
-dnf download --destdir /root/downloads/ nmap
-rpm -K /root/downloads/nmap-*.rpm
-rpm -ivh /root/downloads/nmap-*.rpm
-rpm -e nmap
+sudo dnf download --destdir /root/downloads/ nmap
+# using * with sudo expands as the user not root and returns nothing.  
+# Use sudo bash -c to start a root shell to run the command to see the proper expansion or type the whole filename"
+sudo bash -c 'rpm -K /root/downloads/nmap-*.rpm' 
+sudo bash -c 'rpm -ivh /root/downloads/nmap-*.rpm'
+sudo rpm -e nmap
+
+# Verify Uninstall, use before uninstall to verify present
+sudo rpm -qa nmap
 ```
 
 ---
 
-**Task 15 — DNF Module Streams** *(alpha)*
+### Task 15 — Package Groups & Flatpak *(alpha)*
 
-> Objective: Install and update software packages from remote repository
+> Objective: Install and update software packages from Red Hat CDN, remote repository, or local file system (RHEL 10 objectives — RPM + Flatpak; modularity is deprecated)
 
-- List all available module streams for `postgresql`
-- Enable and install `postgresql` stream version 16
-- Verify the installation
-- Switch to a different stream (if available) or reset the module
-- Remove the postgresql module
+Part A — Package groups:
+- List available package groups
+- Install the "Development Tools" group
+- Remove it
 
 ```bash
-dnf module list postgresql
-dnf module enable postgresql:16
-dnf module install postgresql:16
-dnf module remove postgresql:16
-dnf module reset postgresql
+dnf group list
+dnf group info "Development Tools"
+sudo dnf group install "Development Tools" -y
+sudo dnf group remove "Development Tools" -y
 ```
+
+Part B — Flatpak (now a mandatory RHCSA objective):
+- Add the Flathub remote
+- Search for, install, run, update, and remove an application
+- Clean up unused runtimes
+
+```bash
+flatpak remotes
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+flatpak search gimp
+flatpak install flathub org.gimp.GIMP -y
+flatpak list
+flatpak update -y
+flatpak uninstall org.gimp.GIMP -y
+flatpak uninstall --unused -y
+```
+
+Part C — Installing an alternate app-stream version (the modern replacement for module streams):
+- In RHEL 10, postgresql ships as a plain RPM (v16 default); alternate versions are versioned packages, NOT modules
+
+```bash
+dnf list postgresql\*        # discover available versioned packages
+sudo dnf install postgresql-server -y
+rpm -q postgresql-server
+```
+
+> ⚠️ Legacy note (know it exists, don't rely on it): `dnf module list/enable/install/reset` still runs in RHEL 10 but prints "modularity is deprecated" and will be removed in the next major release. postgresql is no longer delivered as a module on RHEL 10, so `dnf module list postgresql` returns nothing — install the RPM directly.
 
 ---
 
