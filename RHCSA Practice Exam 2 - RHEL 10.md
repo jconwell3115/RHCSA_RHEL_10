@@ -14,8 +14,8 @@
 
 | VM              | vCPU | RAM  | Primary Disk       | Extra Disks                                            |
 | --------------- | ---- | ---- | ------------------ | ------------------------------------------------------ |
-| `rhel10-charlie`  | 2    | 2 GB | 20 GB `/dev/sda`   | 8 GB `/dev/sdb`, 6 GB `/dev/sdc`, 4 GB `/dev/sdd`      |
-| `rhel10-delta`  | 2    | 2 GB | 20 GB `/dev/sda`   | 8 GB `/dev/sdb`                                        |
+| `rhel10-charlie`  | 2    | 2 GB | 20 GB `/dev/vda`   | 8 GB `/dev/vdb`, 6 GB `/dev/vdc`, 4 GB `/dev/vdd`      |
+| `rhel10-delta`  | 2    | 2 GB | 20 GB `/dev/vda`   | 8 GB `/dev/vdb`                                        |
 
 ### VM Configuration Notes
 
@@ -303,25 +303,25 @@ On `delta`:
 
 ---
 
-**Task 16 — GPT Partitions with `parted` (Scripted)** *(charlie, `/dev/sdb`)*
+**Task 16 — GPT Partitions with `parted` (Scripted)** *(charlie, `/dev/vdb`)*
 
 > Objective: List, create, and delete partitions on GPT disks
 
-Using **`parted` in non-interactive mode** (not `fdisk`/`gdisk`) on `/dev/sdb`:
+Using **`parted` in non-interactive mode** (not `fdisk`/`gdisk`) on `/dev/vdb`:
 
 1. Create GPT label
 2. Create partitions:
-   - `sdb1`: 2 GiB — for XFS
-   - `sdb2`: 1 GiB — for swap
-   - `sdb3`: rest of disk — for LVM (flag: `lvm`)
-3. Verify alignment with `parted /dev/sdb align-check optimal 1`
-4. Run `partprobe /dev/sdb`
+   - `vdb1`: 2 GiB — for XFS
+   - `vdb2`: 1 GiB — for swap
+   - `vdb3`: rest of disk — for LVM (flag: `lvm`)
+3. Verify alignment with `parted /dev/vdb align-check optimal 1`
+4. Run `partprobe /dev/vdb`
 
-    parted -s /dev/sdb mklabel gpt
-    parted -s /dev/sdb mkpart primary xfs 1MiB 2049MiB
-    parted -s /dev/sdb mkpart primary linux-swap 2049MiB 3073MiB
-    parted -s /dev/sdb mkpart primary 3073MiB 100%
-    parted -s /dev/sdb set 3 lvm on
+    parted -s /dev/vdb mklabel gpt
+    parted -s /dev/vdb mkpart primary xfs 1MiB 2049MiB
+    parted -s /dev/vdb mkpart primary linux-swap 2049MiB 3073MiB
+    parted -s /dev/vdb mkpart primary 3073MiB 100%
+    parted -s /dev/vdb set 3 lvm on
 
 ---
 
@@ -329,12 +329,12 @@ Using **`parted` in non-interactive mode** (not `fdisk`/`gdisk`) on `/dev/sdb`:
 
 > Objective: Create, mount, unmount, and use VFAT, ext4, and XFS file systems
 
-- Format `sdb1` as **XFS** with label `charlieXFS`
-- Create a small VFAT filesystem on `/dev/sdc` (use partition `sdc1`, size 500 MiB) with label `USBDATA`
+- Format `vdb1` as **XFS** with label `charlieXFS`
+- Create a small VFAT filesystem on `/dev/vdc` (use partition `vdc1`, size 500 MiB) with label `USBDATA`
 - Mount points: `/mnt/charliexfs` and `/mnt/usbdata`
 - `/etc/fstab`:
-  - `sdb1` mounted by **UUID**
-  - `sdc1` mounted by **LABEL**, mount options `noexec,nodev,nosuid`
+  - `vdb1` mounted by **UUID**
+  - `vdc1` mounted by **LABEL**, mount options `noexec,nodev,nosuid`
 - Run `mount -a`, then `systemctl daemon-reload`
 - Reboot and confirm both are mounted
 
@@ -354,11 +354,11 @@ This exam variant uses a **swap file** instead of a swap partition:
 
 ---
 
-**Task 19 — LVM with Striping and Custom PE Size** *(charlie, `/dev/sdb3` + `/dev/sdd`)*
+**Task 19 — LVM with Striping and Custom PE Size** *(charlie, `/dev/vdb3` + `/dev/vdd`)*
 
 > Objective: Create/remove PVs, VGs, LVs
 
-1. Initialize `/dev/sdb3` and `/dev/sdd` as physical volumes (whole `sdd`, no partition)
+1. Initialize `/dev/vdb3` and `/dev/vdd` as physical volumes (whole `vdd`, no partition)
 2. Create VG `vg_lab2` with PE size **32 MiB**
 3. Create a **striped** LV `lv_stripe` with 2 stripes across both PVs, size `1 GiB`
 4. Create a **linear** LV `lv_home2` sized using **80 extents**
@@ -372,15 +372,15 @@ This exam variant uses a **swap file** instead of a swap partition:
 
 > Objective: Extend existing logical volumes; move data non-destructively
 
-1. Use `pvmove` to migrate all extents off `/dev/sdd`
-2. Remove `/dev/sdd` from `vg_lab2` (`vgreduce`)
-3. Wipe the LVM signature from `/dev/sdd` (`pvremove`, `wipefs -a`)
+1. Use `pvmove` to migrate all extents off `/dev/vdd`
+2. Remove `/dev/vdd` from `vg_lab2` (`vgreduce`)
+3. Wipe the LVM signature from `/dev/vdd` (`pvremove`, `wipefs -a`)
 4. Extend `lv_home2` to **use all remaining free space** in `vg_lab2` in a **single command** and grow the XFS filesystem online
 5. Confirm with `df -h /mnt/home2`
 
-    pvmove /dev/sdd
-    vgreduce vg_lab2 /dev/sdd
-    pvremove /dev/sdd
+    pvmove /dev/vdd
+    vgreduce vg_lab2 /dev/vdd
+    pvremove /dev/vdd
     lvextend -l +100%FREE -r /dev/vg_lab2/lv_home2
 
 ---
@@ -722,16 +722,16 @@ As user `emma` (rootless):
 
 ### Parted (scripted)
 
-    parted -s /dev/sdX mklabel gpt
-    parted -s /dev/sdX mkpart primary xfs 1MiB 2049MiB
-    parted -s /dev/sdX set 3 lvm on
-    parted /dev/sdX align-check optimal 1
+    parted -s /dev/vdX mklabel gpt
+    parted -s /dev/vdX mkpart primary xfs 1MiB 2049MiB
+    parted -s /dev/vdX set 3 lvm on
+    parted /dev/vdX align-check optimal 1
 
 ### LVM advanced
 
     lvcreate --type striped -i 2 -L 1G -n lv_stripe vg_lab2
-    pvmove /dev/sdd
-    vgreduce vg_lab2 /dev/sdd
+    pvmove /dev/vdd
+    vgreduce vg_lab2 /dev/vdd
     lvextend -l +100%FREE -r /dev/vg_lab2/lv_home2
 
 ### Firewalld zones + rich rules
