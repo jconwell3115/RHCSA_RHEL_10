@@ -1,5 +1,5 @@
 
-# 🧪 RHCSA Practice Exam 2 — RHEL 10 (EX200)
+# 🧪 RHCSA Practice Exam #2 — RHEL 10 (EX200)
 
 > **Format:** Performance-based | **Time Limit:** 2.5 hours | **Pass Score:** ~70%
 > All configurations **must persist after reboot** without intervention.
