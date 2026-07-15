@@ -8,28 +8,26 @@ note: Golden image build lives here; RHCA lab guide references it downstream.
 # 🧪 RHCSA Practice Exam — Environment Setup & Usage Guide
 
 > **Purpose:** Build, seed, run, and reset the lab environments for **RHCSA Practice Exam 1** (alpha/bravo) and **RHCSA Practice Exam 2** (charlie/delta).
->
 > **Platform:** libvirt/KVM on your existing RHEL host.
->
 > **Ordering note:** RHCSA comes first in your cert journey, so the **golden image build lives in this guide**. The later `[[RHCA-Practice-Lab-Node-Setup-Guide]]` reuses the same image and simply references Phase 0 here.
->
 > **Key principle:** Each exam has deliberate pre-conditions (broken passwords, extra disks, wrong boot target). Set those up before starting the timer, then snapshot-revert to retake cleanly.
 
 ---
 
 ## 📊 Exam-at-a-Glance
 
-| Attribute       | Exam 1                             | Exam 2                               |
-| --------------- | ---------------------------------- | ------------------------------------ |
-| VMs             | `rhel10-alpha`, `rhel10-bravo` | `rhel10-charlie`, `rhel10-delta` |
-| Subnet          | `192.168.100.0/24`               | `10.20.30.0/24`                    |
-| Node IPs        | alpha`.10`, bravo `.20`        | charlie`.11`, delta `.12`        |
-| Break-in target | bravo (rd.break method)            | charlie (init=/bin/bash method)      |
-| Special boot    | none                               | delta boots to`rescue.target`      |
-| Extra disks     | alpha +10G; bravo +10G, +5G        | charlie +8G, +6G, +4G; delta +8G     |
-| Tasks           | 35                                 | 35                                   |
-| Time limit      | 2.5 hrs                            | 2.5 hrs                              |
-| Pass mark       | 25 / 35                            | 25 / 35                              |
+| Attribute         | Exam 1                                       | Exam 2                                         |
+| ----------------- | -------------------------------------------- | ---------------------------------------------- |
+| VMs               | `rhel10-alpha`, `rhel10-bravo`           | `rhel10-charlie`, `rhel10-delta`           |
+| Subnet            | `192.168.100.0/24`                         | `10.20.30.0/24`                              |
+| Node IPs          | alpha`.10`, bravo `.20`                  | charlie`.11`, delta `.12`                  |
+| Break-in target   | bravo (init=/bin/bash method)                | charlie (init=/bin/bash method)                |
+| Special boot      | none                                         | delta boots to`rescue.target`                |
+| Extra disks       | alpha +10G; bravo +10G, +5G                  | charlie +8G, +6G, +4G; delta +8G               |
+| Local repo source | DVD ISO attached to`alpha` as `/dev/sr0` | DVD ISO attached to`charlie` as `/dev/sr0` |
+| Tasks             | 35                                           | 35                                             |
+| Time limit        | 2.5 hrs                                      | 2.5 hrs                                        |
+| Pass mark         | 25 / 35                                      | 25 / 35                                        |
 
 ---
 
@@ -92,16 +90,88 @@ sudo virsh pool-autostart isopool
 >
 > If you use `virt-install`/`virsh` with `security_driver = "selinux"` and hit permission denials, also verify `/home` itself is traversable by qemu (mode `0711` on the parent dirs) and that `dynamic_ownership` in `/etc/libvirt/qemu.conf` is behaving as expected.
 
-### 0.3 — Stage the boot ISO and write the kickstart
+### 0.3 / 0.4 — Install the Golden VM (choose ONE path)
 
-Place the RHEL 10 boot ISO in the ISO pool at `/home/libvirt/iso/rhel-10-boot.iso`, then create the kickstart in the image pool tree:
+> **Why two paths:** The **Boot ISO** contains only the installer — no package trees. A fully headless kickstart with `%packages` therefore **cannot** install from the Boot ISO alone; it needs either a network repo or the full media. The **DVD ISO** carries `BaseOS`/`AppStream`, so `file:///run/install/repo` resolves and the install runs unattended.
+>
+> | Path        | Media            | Interaction                   | Package source                          | Best when                                                          |
+> | ----------- | ---------------- | ----------------------------- | --------------------------------------- | ------------------------------------------------------------------ |
+> | **A** | Boot ISO (~1 GB) | Manual, via graphical console | Red Hat CDN (registered) or network URL | You want a small download and don't mind clicking through Anaconda |
+> | **B** | DVD ISO (~8 GB)  | Zero-touch kickstart          | DVD (`file:///run/install/repo`)      | You want a repeatable, hands-off build                             |
+
+---
+
+#### 🅰️ PATH A — Manual GUI Install from the Boot ISO
+
+Uses the graphical Anaconda installer driven through the **Cockpit VM console (VNC)** — no local GUI needed, just a browser.
+
+**A.1 — Stage the Boot ISO**
 
 ```bash
+# Boot ISO in the ISO pool
+ls -lh /home/libvirt/iso/rhel-10.1-x86_64-boot.iso
+sudo virsh pool-refresh isopool
+```
+
+**A.2 — Launch the installer with a graphical console**
+
+```bash
+sudo virt-install \
+  --name rhel10-golden \
+  --memory 2048 --vcpus 2 \
+  --disk pool=homepool,size=20,format=qcow2 \
+  --location /home/libvirt/iso/rhel-10.1-x86_64-boot.iso \
+  --os-variant rhel10.0 \
+  --network network=default \
+  --graphics vnc,listen=0.0.0.0 \
+  --noautoconsole
+```
+
+> `--graphics vnc` (instead of `--graphics none`) is the key change — it exposes a graphical console you can open from **Cockpit → Virtual Machines → rhel10-golden → Console**, or with `virt-viewer --connect qemu+ssh://<host>/system rhel10-golden`.
+
+**A.3 — Work through Anaconda manually**
+
+Set these to match what the kickstart would have done:
+
+- **Installation Source:** the Boot ISO has no packages, so either:
+  - **Connect to Red Hat** (Installation Source → *Red Hat CDN*) using your Developer subscription — pulls BaseOS/AppStream over the network, **or**
+  - Set a **network install source URL** (e.g. a mirror/satellite) if you have one.
+- **Software Selection:** *Minimal Install* + *Standard* (add `vim-enhanced`, `tmux`, `bind-utils`, `chrony`, `policycoreutils-python-utils` after first boot if not offered).
+- **Installation Destination:** auto/LVM on the single 20 GB disk.
+- **Network & Hostname:** `rhel10-golden`, DHCP.
+- **root password:** `RootLab_2026`; **create user** `student` (add to `wheel`).
+- **Time & Date:** `America/New_York`, enable NTP (chrony).
+
+**A.4 — Post-install parity with the kickstart**
+
+Once it reboots, log in as `student` and reproduce the kickstart's `%post`:
+
+```bash
+echo 'student ALL=(ALL) NOPASSWD:ALL' | sudo tee /etc/sudoers.d/student
+sudo chmod 0440 /etc/sudoers.d/student
+sudo systemctl enable --now cockpit.socket
+sudo dnf clean all
+```
+
+Then continue to **0.5** (update + guest agent).
+
+---
+
+#### 🅱️ PATH B — Headless Kickstart Install from the DVD ISO
+
+Fully automated, no console interaction. Requires the **DVD ISO** — download it first via **Phase 2.5** (the Boot ISO will *not* work here).
+
+> **Ordering note:** Path B depends on the DVD ISO, so run **Phase 2.5** *before* Phase 0 if you choose this path. (Phase 2.5 is otherwise positioned for the Task 13 repo work, but the same file serves both purposes — one download, two uses.)
+
+**B.1 — Stage the DVD ISO and write the kickstart**
+
+```bash
+ls -lh /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso   # from Phase 2.5
 sudo mkdir -p /home/libvirt/images/ks
 sudo vim /home/libvirt/images/ks/rhel10-golden.ks
 ```
 
-Kickstart contents:
+Kickstart contents (unchanged logic — the `file:///run/install/repo` lines now resolve because the **DVD** is the install source):
 
 ```text
 #version=RHEL10
@@ -122,6 +192,7 @@ zerombr
 clearpart --all --initlabel --drives=vda
 autopart --type=lvm
 
+# Resolves against the mounted DVD (has BaseOS + AppStream); NOT valid with the Boot ISO
 url --url="file:///run/install/repo"
 repo --name="AppStream" --baseurl="file:///run/install/repo/AppStream"
 
@@ -147,14 +218,14 @@ dnf clean all
 %end
 ```
 
-### 0.4 — Install the golden VM (into the homepool pool)
+**B.2 — Install the golden VM (headless, DVD as source)**
 
 ```bash
 sudo virt-install \
   --name rhel10-golden \
   --memory 2048 --vcpus 2 \
   --disk pool=homepool,size=20,format=qcow2 \
-  --location /home/libvirt/iso/rhel-10.1-x86_64-boot.iso \
+  --location /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso \
   --initrd-inject /home/libvirt/images/ks/rhel10-golden.ks \
   --extra-args "inst.ks=file:/rhel10-golden.ks console=ttyS0,115200" \
   --os-variant rhel10.0 \
@@ -164,10 +235,16 @@ sudo virt-install \
   --noautoconsole
 ```
 
-Watch the install:
+> The `--location` pointing at the **DVD** ISO instead of the Boot ISO. That's what makes `file:///run/install/repo` (and the whole `%packages` block) actually work unattended.
+
+**B.3 — Watch the install**
 
 ```bash
 sudo virsh console rhel10-golden
+```
+
+It reboots itself on completion (`reboot` directive).
+
 ```
 
 ### 0.5 — Update and install the guest agent
@@ -266,6 +343,76 @@ sudo chmod +x ~/my_work_tools/bin/bash/add-disk.sh
 
 ---
 
+## 💿 PHASE 2.5 — Stage the RHEL 10 DVD ISO (Repository Tasks / Task 13)
+
+> **Why:** Task 13 in *both* exams builds a **local YUM/DNF repo from the RHEL 10 installation ISO**. The lightweight **Boot ISO** used to build the golden image in Phase 0 does **not** contain the `BaseOS`/`AppStream` package trees — only the full **DVD ISO** does. This phase downloads the DVD ISO once (headless, CLI-only) and attaches it to the relevant exam VM as a virtual CD-ROM (`/dev/sr0`), matching how the real EX200 presents install media.
+> **One-time cost:** ~8 GB download. Do it once; it lives in the ISO pool and is reused on every retake.
+> **Note:** If building the golden image via Path B (headless kickstart), run this phase first; the DVD ISO it downloads is reused by both Phase 0.4-B and Task 13."
+
+### 2.5.1 — Prep the ISO pool for non-root download
+
+The ISO pool (`/home/libvirt/iso`) is owned by `root`. To download into it as your regular user **without** changing ownership (which would break libvirt/qemu access), grant yourself access with an **additive ACL** — it layers on top of the existing owner/group/mode, breaking nothing:
+
+```bash
+# Additive: does NOT change owner, group, or existing mode bits
+sudo setfacl -m u:"$USER":rwx /home/libvirt/iso
+sudo setfacl -d -m u:"$USER":rwX /home/libvirt/iso   # capital X: dirs get +x, files don't
+getfacl /home/libvirt/iso                            # confirm: user:<you>:rwx present
+```
+
+> SELinux context for this path (`virt_content_t`) is already handled by the Phase 0.2 pool setup. If you skipped it, re-run the `semanage fcontext … virt_content_t` + `restorecon` lines from Phase 0.2.
+
+### 2.5.2 — Generate a Red Hat offline API token (one-time, from any browser)
+
+Headless download uses the Red Hat API, so grab a token from a browser on your **laptop** (not the KVM host):
+
+1. Visit **https://access.redhat.com/management/api** → **Generate Token**.
+2. Copy the long `eyJ…` string; store it in your password manager.
+
+> The token never expires as long as it's used at least once every 30 days. Treat it like a password — never commit it in plaintext to this shared note.
+
+### 2.5.3 — Download the DVD ISO via CLI (on the KVM host)
+
+```bash
+sudo dnf install -y jq curl
+
+# --- fill in ---
+offline_token="PASTE_OFFLINE_TOKEN"
+# DVD iso SHA-256 from https://developers.redhat.com/products/rhel/download (10.2 release row)
+checksum="PASTE_RHEL_10.2_DVD_SHA256"
+dest="/home/libvirt/iso"
+# ---------------
+
+cd "$dest" || exit 1
+
+# 1) offline token -> short-lived access token
+access_token=$(curl -s \
+  https://sso.redhat.com/auth/realms/redhat-external/protocol/openid-connect/token \
+  -d grant_type=refresh_token -d client_id=rhsm-api \
+  -d refresh_token="$offline_token" | jq -r '.access_token')
+
+# 2) resolve signed URL + filename by checksum
+image=$(curl -s -H "Authorization: Bearer $access_token" \
+  "https://api.access.redhat.com/management/v1/images/$checksum/download")
+filename=$(echo "$image" | jq -r '.body.filename')
+url=$(echo "$image" | jq -r '.body.href')
+
+# 3) download (resumable if interrupted)
+curl --output "$filename" "$url" --continue-at -
+```
+
+### 2.5.4 — Verify integrity and register with the pool
+
+```bash
+sha256sum rhel-10.2-x86_64-dvd.iso     # compare against the download-page checksum
+sudo virsh pool-refresh isopool         # make libvirt aware of the new volume
+sudo virsh vol-list isopool
+```
+
+> **Do not** rename the file to a Boot-ISO path — keep DVD and Boot ISOs as distinct files so Phase 0 (Boot) and Phase 2.5 (DVD) never collide.
+
+---
+
 ## 🅰️ PHASE 3 — Exam 1 Setup (alpha & bravo)
 
 ### 3.1 — Clone the VMs
@@ -324,6 +471,17 @@ echo "bravo root password scrambled — break in via rd.break (Task 1)."
 
 Leave alpha's root password at the known golden value (`RootLab_2026`).
 
+### 3.5b — Attach the DVD ISO to alpha (Task 13 repo source)
+
+> **Note:** the sda disk is created by deffault as the VMs CD-ROM drive and cannot be removed.  Modify it to insert the .iso as source repo.  If VM is off, remove the `--live` parameter.
+
+```bash
+sudo virsh change-media rhel10-alpha sda /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config --live
+sudo virsh domblklist rhel10-alpha   # confirm the cdrom shows up
+```
+
+> Inside alpha it appears as `/dev/sr0`. Students mount it at `/mnt/rhel10iso` and point the `.repo` file at `BaseOS`/`AppStream` (Task 13). Attach **before** the 3.6 snapshot so `exam1-ready` retains the media across reverts.
+
 ### 3.6 — Start and snapshot
 
 ```bash
@@ -344,10 +502,10 @@ done
 
 ```bash
 sudo virt-clone --original rhel10-golden --name rhel10-charlie \
-  --file /var/lib/libvirt/lab-images/rhel10-charlie.qcow2
+  --file /home/libvirt/images/rhel10-charlie.qcow2
 
 sudo virt-clone --original rhel10-golden --name rhel10-delta \
-  --file /var/lib/libvirt/lab-images/rhel10-delta.qcow2
+  --file /home/libvirt/images/rhel10-delta.qcow2
 ```
 
 ### 4.2 — Attach the Exam 2 network
@@ -400,6 +558,19 @@ echo "delta default target set to rescue.target (Task 2 changes it to graphical)
 ```
 
 > `rescue.target` prompts for the root password. Keep delta's root password at the known golden value so you can enter the rescue shell — only charlie's password is scrambled.
+
+### 4.6b — Attach the DVD ISO to charlie (Task 13 repo source)
+
+> **Note:** the sda disk is created by deffault as the VMs CD-ROM drive and cannot be removed.  Modify it to insert the .iso as source repo.  If VM is off, remove the `--live` parameter.
+
+```bash
+sudo virsh change-media rhel10-charlie \
+  sda /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso \
+  --insert --config --live
+sudo virsh domblklist rhel10-charlie
+```
+
+> Appears as `/dev/sr0` inside charlie. Attach **before** the 4.7 snapshot so `exam2-ready` keeps the media.
 
 ### 4.7 — Start and snapshot
 
@@ -553,7 +724,7 @@ For rebuilding everything from scratch after a golden-image update:
 # rebuild-rhcsa-labs.sh — full teardown + rebuild of both exam environments
 set -euo pipefail
 
-POOL=/var/lib/libvirt/lab-images
+POOL=/home/libvirt/images
 
 teardown() {
   for vm in "$@"; do
@@ -594,6 +765,13 @@ sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdc 6
 sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdd 4
 sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-delta   sdb 8
 
+echo "== Attaching DVD ISO for Task 13 (alpha + charlie) =="
+for vm in rhel10-alpha rhel10-charlie; do
+  sudo virsh attach-disk "${vm}" \
+    /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso \
+    sda --type cdrom --mode readonly --config
+done
+
 echo "== Seeding exam pre-conditions =="
 sudo virt-customize -d rhel10-bravo   --root-password "password:$(openssl rand -base64 24)"
 sudo virt-customize -d rhel10-charlie --root-password "password:$(openssl rand -base64 24)"
@@ -617,17 +795,24 @@ echo "== DONE. Both exam environments ready. =="
 
 ## 🚨 TROUBLESHOOTING
 
-| Symptom                                     | Cause / Fix                                                                    |
-| ------------------------------------------- | ------------------------------------------------------------------------------ |
-| Disks show as`/dev/vdb` not `/dev/sdb`  | Used virtio bus. Re-attach with SATA bus, or adapt the task text               |
-| delta boots to multi-user, not rescue       | `set-default rescue.target` did not apply — re-run the virt-customize step  |
-| Cannot break into bravo/charlie             | Password was not scrambled — re-run with a fresh`openssl rand`              |
-| Both exams' VMs see each other              | Wrong network — alpha/bravo on`rhcsa-net1`, charlie/delta on `rhcsa-net2` |
-| `snapshot-revert` fails: domain running   | Run`virsh destroy <vm>` first, then revert                                   |
-| Static IP task breaks SSH access            | Expected — use`virsh console` until the network task is done                |
-| Reboot test wipes a completed task          | The task was not made persistent — redo it correctly                          |
-| GRUB edit will not accept the break-in args | Press`e` at the boot menu, edit the `linux` line, then `Ctrl+X`          |
-| Extra disks missing after revert            | Snapshot was taken before disks attached — re-take the exam-ready snapshot    |
+| Symptom                                                              | Cause / Fix                                                                                                                                        |
+| -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Disks show as`/dev/vdb` not `/dev/sdb`                           | Used virtio bus. Re-attach with SATA bus, or adapt the task text                                                                                   |
+| delta boots to multi-user, not rescue                                | `set-default rescue.target` did not apply — re-run the virt-customize step                                                                      |
+| Cannot break into bravo/charlie                                      | Password was not scrambled — re-run with a fresh`openssl rand`                                                                                  |
+| Both exams' VMs see each other                                       | Wrong network — alpha/bravo on`rhcsa-net1`, charlie/delta on `rhcsa-net2`                                                                     |
+| `snapshot-revert` fails: domain running                            | Run`virsh destroy <vm>` first, then revert                                                                                                       |
+| Static IP task breaks SSH access                                     | Expected — use`virsh console` until the network task is done                                                                                    |
+| Reboot test wipes a completed task                                   | The task was not made persistent — redo it correctly                                                                                              |
+| GRUB edit will not accept the break-in args                          | Press`e` at the boot menu, edit the `linux` line, then `Ctrl+X`                                                                              |
+| Extra disks missing after revert                                     | Snapshot was taken before disks attached — re-take the exam-ready snapshot                                                                        |
+| `dnf repolist` shows no `BaseOS`/`AppStream`                   | DVD not attached or not mounted — check`virsh domblklist <vm>`, then `mount /dev/sr0 /mnt/rhel10iso` and `dnf clean all`                    |
+| DVD ISO gone after`snapshot-revert`                                | Media was attached*after* the exam-ready snapshot — re-attach, then re-take the `examN-ready` snapshot                                        |
+| Boot into emergency mode after adding ISO to`/etc/fstab`           | Hardcoded`/dev/sr0` mount with no disc present — add `nofail` to the fstab options                                                            |
+| EPEL step (Task 13 "if connected") fails offline                     | Expected — EPEL is an internet-only Fedora repo and is**not** on the DVD; skip it in offline runs                                           |
+| `curl`/API download returns null `href`                          | Access token expired (15-min life) or wrong checksum — re-run the token step and re-copy the**DVD** SHA-256                                 |
+| Kickstart install hangs /`%packages` fails with "cannot find repo" | Used the**Boot ISO** with a kickstart — Boot ISO has no packages. Use the **DVD ISO** (`--location …-dvd.iso`) or switch to Path A |
+| Path A: "Error setting up base repository"                           | Boot ISO can't reach packages — register via*Connect to Red Hat* or set a valid network Installation Source                                     |
 
 ---
 
