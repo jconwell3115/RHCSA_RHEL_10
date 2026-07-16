@@ -1,4 +1,3 @@
-
 ---
 title: RHCSA Practice Exam - RHEL 10
 tags: [certifications, rhcsa, rhel10, practice, linux]
@@ -305,7 +304,7 @@ dnf repolist
 
 **Task 13 — Configure Repositories** *(alpha)*
 
-> Objective: Install and update software packages from Red Hat CDN, remote repo, or local file system
+> Objective: Install and update software packages from Red Hat CDN, remote repo, or local file system.  Ensure it persists after reboot.
 
 Configure a local YUM/DNF repository from the RHEL 10 installation ISO:
 
@@ -316,6 +315,38 @@ Configure a local YUM/DNF repository from the RHEL 10 installation ISO:
    - Both enabled, `gpgcheck=0`
 3. Verify with `dnf repolist`
 
+```bash
+sudo mount /dev/sr0 /mnt/rhel10iso
+
+# Create the repo 
+sudo tee /etc/yum.repos.d/rhel10-local.repo >/dev/null <<'EOF'
+[BaseOS]
+name=Base OS Packages from DVD
+baseurl=file:///mnt/rhel10iso/BaseOS
+enabled=1
+gpgcheck=0
+
+[AppStream]
+name=AppStream Packages from DVD
+baseurl=file:///mnt/rhel10iso/AppStream
+enabled=1
+gpgcheck=0
+EOF
+
+# Verify
+sudo dnf repolist
+ls /mnt/rhel10iso/
+
+# Make persist past reboot
+echo '/dev/sr0  /mnt/rhel10iso  iso9660  ro,nofail  0 0' | sudo tee -a /etc/fstab
+
+# Test persitence without reboot
+sudo umount /mnt/rhel10iso 2>/dev/null
+sudo mount -a
+sudo dnf repolist
+ls /mnt/rhel10iso/
+
+```
 ---
 
 **Task 14 — Package Management Operations** *(alpha)*
@@ -351,18 +382,20 @@ sudo rpm -qa nmap
 > Objective: Install and update software packages from Red Hat CDN, remote repository, or local file system (RHEL 10 objectives — RPM + Flatpak; modularity is deprecated)
 
 Part A — Package groups:
+
 - List available package groups
 - Install the "Development Tools" group
 - Remove it
 
 ```bash
-dnf group list
-dnf group info "Development Tools"
+sudo dnf group list
+sudo dnf group info "Development Tools"
 sudo dnf group install "Development Tools" -y
 sudo dnf group remove "Development Tools" -y
 ```
 
 Part B — Flatpak (now a mandatory RHCSA objective):
+
 - Add the Flathub remote
 - Search for, install, run, update, and remove an application
 - Clean up unused runtimes
@@ -373,12 +406,14 @@ flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flat
 flatpak search gimp
 flatpak install flathub org.gimp.GIMP -y
 flatpak list
+flatpak run org.gimp.GIMP
 flatpak update -y
 flatpak uninstall org.gimp.GIMP -y
 flatpak uninstall --unused -y
 ```
 
 Part C — Installing an alternate app-stream version (the modern replacement for module streams):
+
 - In RHEL 10, postgresql ships as a plain RPM (v16 default); alternate versions are versioned packages, NOT modules
 
 ```bash
