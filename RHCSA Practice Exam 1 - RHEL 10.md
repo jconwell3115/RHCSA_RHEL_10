@@ -345,8 +345,8 @@ sudo umount /mnt/rhel10iso 2>/dev/null
 sudo mount -a
 sudo dnf repolist
 ls /mnt/rhel10iso/
-
 ```
+
 ---
 
 **Task 14 — Package Management Operations** *(alpha)*
@@ -445,6 +445,54 @@ Using `/dev/vdb` on bravo:
 5. Run `partprobe` to inform the kernel
 6. Verify with `lsblk` and `fdisk -l /dev/vdb`
 
+```bash
+# Open fdisk
+sudo fdisk /dev/vdb
+
+# Inside fdisk:
+g          # Create GPT partition table
+
+n          # Create vdb1
+<Enter>    # Partition number 1
+<Enter>    # First sector
++1G        # Size
+
+n          # Create vdb2
+<Enter>    # Partition number 2
+<Enter>    # First sector
++500M      # Size
+
+t          # Change partition type
+2          # Select partition 2
+19         # Linux swap
+
+n          # Create vdb3
+<Enter>    # Partition number 3
+<Enter>    # First sector
++2G        # Size
+
+p          # Verify partition layout
+
+w          # Write changes and exit
+```
+
+```bash
+# Inform the kernel of partition table changes
+sudo partprobe /dev/vdb
+
+# Verify
+lsblk
+sudo fdisk -l /dev/vdb
+```
+
+Expected Result:
+
+```text
+/dev/vdb1    1G    Linux filesystem
+/dev/vdb2  500M    Linux swap
+/dev/vdb3    2G    Linux filesystem
+```
+
 ---
 
 **Task 17 — Create and Mount File Systems by UUID** *(bravo)*
@@ -458,6 +506,55 @@ Using `/dev/vdb` on bravo:
 5. Run `mount -a` and verify with `df -hT`
 6. Create a test file in each mount point and reboot to confirm persistence
 
+```bash
+# Create filesystems
+sudo mkfs.xfs /dev/vdb1
+sudo mkfs.ext4 -L DATASTORE /dev/vdb3
+
+# Create mount points
+sudo mkdir -p /mnt/xfs_data
+sudo mkdir -p /mnt/ext4_data
+
+# Get UUID of vdb1
+UUID=$(sudo blkid -s UUID -o value /dev/vdb1)
+
+# Add persistent mounts to /etc/fstab
+echo "UUID=${UUID} /mnt/xfs_data xfs defaults 0 0" | sudo tee -a /etc/fstab
+echo "LABEL=DATASTORE /mnt/ext4_data ext4 defaults 0 0" | sudo tee -a /etc/fstab
+
+# Mount all filesystems
+sudo mount -a
+
+# Verify
+df -hT
+lsblk -f
+
+# Create test files
+sudo touch /mnt/xfs_data/xfs_test.txt
+sudo touch /mnt/ext4_data/ext4_test.txt
+
+# Reboot and verify persistence
+sudo reboot
+```
+
+After reboot:
+
+```bash
+df -hT
+ls /mnt/xfs_data
+ls /mnt/ext4_data
+```
+
+Expected Result:
+
+```text
+/dev/vdb1 mounted on /mnt/xfs_data (xfs) using UUID=
+/dev/vdb3 mounted on /mnt/ext4_data (ext4) using LABEL=DATASTORE
+
+/mnt/xfs_data/xfs_test.txt exists
+/mnt/ext4_data/ext4_test.txt exists
+```
+
 ---
 
 **Task 18 — Configure Swap Space** *(bravo)*
@@ -467,6 +564,50 @@ Using `/dev/vdb` on bravo:
 1. Format `vdb2` as swap with label `EXTRASWAP`
 2. Add a persistent swap entry to `/etc/fstab` with priority `10`
 3. Activate the swap and verify with `swapon -s` and `free -h`
+
+```bash
+# Create swap signature
+sudo mkswap /dev/vdb2
+
+# Get UUID
+UUID=$(sudo blkid -s UUID -o value /dev/vdb2)
+
+# Add persistent swap entry
+echo "UUID=${UUID} none swap defaults 0 0" | sudo tee -a /etc/fstab
+
+# Verify fstab
+tail -1 /etc/fstab
+
+# Enable swap
+sudo swapon -a
+
+# Verify
+swapon --show
+free -h
+
+# Reboot and verify persistence
+sudo reboot
+```
+
+After reboot:
+
+```bash
+swapon --show
+free -h
+```
+
+Expected Result:
+
+```text
+NAME      TYPE SIZE USED PRIO
+/dev/vdb2 partition 500M   0B   -2
+```
+
+And:
+
+```text
+Swap: 500M
+```
 
 ---
 
@@ -484,6 +625,55 @@ Using `/dev/vdc` (full disk, unpartitioned):
 6. Mount both persistently under `/mnt/lv_data` and `/mnt/lv_logs`
 7. Verify with `pvs`, `vgs`, `lvs`
 
+```bash
+# Create physical volume
+sudo pvcreate /dev/vdc
+
+# Create volume group with 16 MiB PE size
+sudo vgcreate -s 16M vg_lab /dev/vdc
+
+# Create logical volumes
+sudo lvcreate -L 500M -n lv_data vg_lab
+sudo lvcreate -l 25 -n lv_logs vg_lab
+
+# Format logical volumes
+sudo mkfs.xfs /dev/vg_lab/lv_data
+sudo mkfs.ext4 /dev/vg_lab/lv_logs
+
+# Create mount points
+sudo mkdir -p /mnt/lv_data
+sudo mkdir -p /mnt/lv_logs
+
+# Get UUIDs
+UUID_DATA=$(sudo blkid -s UUID -o value /dev/vg_lab/lv_data)
+UUID_LOGS=$(sudo blkid -s UUID -o value /dev/vg_lab/lv_logs)
+
+# Add persistent mounts
+echo "UUID=${UUID_DATA} /mnt/lv_data xfs defaults 0 0" | sudo tee -a /etc/fstab
+echo "UUID=${UUID_LOGS} /mnt/lv_logs ext4 defaults 0 0" | sudo tee -a /etc/fstab
+
+# Verify fstab
+tail -2 /etc/fstab
+
+# Mount and verify
+sudo mount -a
+df -hT
+
+# Verify LVM layout
+sudo pvs
+sudo vgs
+sudo lvs
+```
+
+Expected Result:
+
+```text
+PV: /dev/vdc     VG: vg_lab
+VG PE size: 16.00 MiB
+lv_data  500.00m  (XFS)   -> /mnt/lv_data
+lv_l
+```
+
 ---
 
 **Task 20 — Extend a Logical Volume** *(bravo)*
@@ -497,7 +687,23 @@ Extend the `lv_data` logical volume (from Task 19) to **1 GiB** total size:
 3. Confirm the new size with `df -h /mnt/lv_data`
 
 ```bash
-lvextend -L 1G -r /dev/vg_lab/lv_data
+# Verify free space in the volume group
+sudo vgs vg_lab
+
+# Extend LV to 1 GiB and grow filesystem in one command
+sudo lvextend -L 1G -r /dev/vg_lab/lv_data
+
+# Confirm new size
+df -h /mnt/lv_data
+sudo lvs
+```
+
+Expected Result:
+
+```text
+lv_data  vg_lab  1.00g   -> /mnt/lv_data (XFS)
+
+df -h shows /mnt/lv_data ~1.0G
 ```
 
 ---
