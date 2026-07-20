@@ -377,7 +377,7 @@ sudo rpm -qa nmap
 
 ---
 
-### Task 15 — Package Groups & Flatpak *(alpha)*
+**Task 15 — Package Groups & Flatpak *(alpha)***
 
 > Objective: Install and update software packages from Red Hat CDN, remote repository, or local file system (RHEL 10 objectives — RPM + Flatpak; modularity is deprecated)
 
@@ -727,6 +727,71 @@ On `bravo` (NFS server):
 5. Add permanent firewall rules for `nfs`, `mountd`, `rpc-bind`
 6. Confirm exports with `exportfs -v`
 
+```bash
+# Install NFS utilities
+sudo dnf install -y nfs-utils
+
+# Create export directories
+sudo mkdir -p /export/shared
+sudo mkdir -p /export/readonly
+```
+**3 ways to make the /export/shared directory writable on the server (bravo):**
+
+```bash
+# Loosen permissions (not recommended for production)
+sudo chmod 0777 /export/shared
+
+# Own the dir by the squashed user on the server
+sudo chown nobody:nobody /export/shared
+
+# Set Specific user/group ownership and use root_squash in /etc/exports (recommended)
+# NFS Service User Setup — Map All Clients to `nfsuser` (UID/GID 1500)
+
+# Create the group with a specific GID
+sudo groupadd -g 1500 nfsuser
+
+# Create the user with a specific UID, primary group, no login
+sudo useradd -u 1500 -g 1500 -M -s /sbin/nologin nfsuser
+
+# Verify the IDs
+id nfsuser
+
+# Own the export directory by that service user
+sudo chown -R nfsuser:nfsuser /export/shared
+
+# Set collaborative permissions (SGID so new files inherit the group)
+sudo chmod 2775 /export/shared
+
+# Configure the export to squash everyone to UID/GID 1500
+echo "/export/shared 192.168.100.0/24(rw,sync,all_squash,anonuid=1500,anongid=1500)" | sudo tee -a /etc/exports
+
+# Add export for read-only directory
+echo "/export/readonly 192.168.100.10(ro,sync,no_subtree_check)" | sudo tee -a /etc/exports
+
+# Verify exports file
+cat /etc/exports
+
+# Enable and start the NFS server
+sudo systemctl enable --now nfs-server.service
+
+# Add permanent firewall rules
+sudo firewall-cmd --permanent --add-service=nfs
+sudo firewall-cmd --permanent --add-service=mountd
+sudo firewall-cmd --permanent --add-service=rpc-bind
+sudo firewall-cmd --reload
+
+# Re-export and confirm
+sudo exportfs -rav
+sudo exportfs -v
+```
+
+Expected Result:
+
+```text
+/export/shared    192.168.100.0/24(rw,sync,...)
+/export/readonly  192.168.100.10(ro,sync,...)
+```
+
 ---
 
 **Task 22 — Mount NFS on Client** *(alpha)*
@@ -739,6 +804,45 @@ On `alpha` (NFS client):
 2. Mount them using NFS entries in `/etc/fstab` with the `_netdev` option
 3. Verify with `mount -a` and `df -hT`
 4. Create a test file in `/mnt/nfs_shared` and verify it appears on bravo
+
+```bash
+# Install NFS utilities (needed for the client too)
+sudo dnf install -y nfs-utils
+
+# Create mount points
+sudo mkdir -p /mnt/nfs_shared
+sudo mkdir -p /mnt/nfs_ro
+
+# Add persistent NFS entries to /etc/fstab
+echo "192.168.100.20:/export/shared /mnt/nfs_shared nfs _netdev 0 0" | sudo tee -a /etc/fstab
+echo "192.168.100.20:/export/readonly /mnt/nfs_ro nfs _netdev 0 0" | sudo tee -a /etc/fstab
+
+# Verify fstab
+tail -2 /etc/fstab
+
+# Mount and verify
+sudo mount -a
+df -hT
+
+# Create test file on the shared (rw) mount
+sudo touch /mnt/nfs_shared/from_alpha.txt
+ls -l /mnt/nfs_shared
+```
+
+On bravo, confirm the file appeared:
+
+```bash
+ls -l /export/shared
+```
+
+Expected Result:
+
+```text
+192.168.100.20:/export/shared   -> /mnt/nfs_shared  (nfs4)
+192.168.100.20:/export/readonly -> /mnt/nfs_ro       (nfs4)
+
+/export/shared/from_alpha.txt   visible on bravo
+```
 
 ---
 
