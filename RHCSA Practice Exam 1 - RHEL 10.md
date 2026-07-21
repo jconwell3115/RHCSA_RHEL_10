@@ -735,6 +735,7 @@ sudo dnf install -y nfs-utils
 sudo mkdir -p /export/shared
 sudo mkdir -p /export/readonly
 ```
+
 **3 ways to make the /export/shared directory writable on the server (bravo):**
 
 ```bash
@@ -858,19 +859,62 @@ On `alpha`, configure `autofs` to automatically mount user home directories from
 4. Start and enable `autofs`
 5. Test by switching to a user whose home directory should be mounted
 
+
+> Prerequisite — export /export/home on bravo
+
 ```bash
-# /etc/auto.master.d/direct.autofs
-/-  /etc/auto.direct
-
-# /etc/auto.direct
-/autodir  -rw  bravo:/export/shared
-
-# /etc/auto.master.d/home.autofs
-/mnt/autohome  /etc/auto.home
-
-# /etc/auto.home
-*  -rw  bravo:/export/home/&
+# On bravo
+sudo mkdir -p /export/home
+sudo useradd -b /export/home autouser        # test user with home under /export/home
+echo "/export/home 192.168.100.0/24(rw,sync,no_subtree_check,crossmnt,no_root_squash)" | sudo tee -a /etc/exports
+sudo exportfs -rav
+sudo exportfs -v
 ```
+
+**On alpha**
+
+```bash
+# Install autofs
+sudo dnf install -y autofs
+
+# DIRECT MAP — master entry
+echo "/-  /etc/auto.direct" | sudo tee /etc/auto.master.d/direct.autofs
+
+#  Direct map file
+echo "/autodir  -rw  bravo:/export/shared" | sudo tee /etc/auto.direct
+
+# INDIRECT MAP — master entry
+echo "/mnt/autohome  /etc/auto.home" | sudo tee /etc/auto.master.d/home.autofs
+
+# Indirect map file (& expands to the requested key/username)
+echo "*  -rw  bravo:/export/home/&" | sudo tee /etc/auto.home
+
+# Enable and start autofs
+sudo systemctl enable --now autofs
+
+# Verify service and maps
+sudo systemctl status autofs
+```
+
+**Test**
+
+```bash
+# Direct map — access triggers the mount
+ls /autodir
+df -hT | grep autodir
+
+# Indirect map — accessing a user's path triggers the mount
+ls /mnt/autohome/autouser
+df -hT | grep autohome
+```
+
+**Expected Result:**
+
+```text
+bravo:/export/shared          -> /autodir           (auto-mounted on access)
+bravo:/export/home/autouser   -> /mnt/autohome/autouser (auto-mounted on access)
+```
+
 
 ---
 
@@ -885,8 +929,45 @@ The following files and directories have incorrect permissions. Fix them:
 3. A file `/tmp/badperms` exists with permissions `777` — change to `640`, owner `bob`, group `developers`
 4. Find all world-writable files under `/etc` and report them (save list to `/root/world_writable.txt`)
 
+
 ```bash
-find /etc -perm -o+w -type f > /root/world_writable.txt
+# Fix /var/www/html — root:root, world-readable, not world-writable
+sudo chown root:root /var/www/html
+sudo chmod 755 /var/www/html
+
+# Verify
+ls -ld /var/www/html
+
+# Create /secure/app — alice:developers, no access for others, SGID
+sudo mkdir -p /secure/app
+sudo chown alice:developers /secure/app
+sudo chmod 2770 /secure/app
+
+# Verify
+ls -ld /secure/app
+
+
+# Fix /tmp/badperms — 640, bob:developers
+sudo touch /tmp/badperms
+sudo chown bob:developers /tmp/badperms
+sudo chmod 640 /tmp/badperms
+
+# Verify
+ls -l /tmp/badperms
+
+# Find world-writable files under /etc and save the list
+sudo find /etc -perm -o+w -type f > /root/world_writable.txt
+
+# Verify
+sudo cat /root/world_writable.txt
+```
+**Expected Results:**
+
+```text
+/var/www/html   drwxr-xr-x  root root
+/secure/app     drwxrws---  alice developers
+/tmp/badperms   -rw-r-----  bob developers
+/root/world_writable.txt   contains any world-writable files found under /etc
 ```
 
 ---
