@@ -986,6 +986,37 @@ sudo cat /root/world_writable.txt
 4. Verify sync with `chronyc tracking` and `timedatectl`
 5. Set the timezone to `America/Chicago` on alpha and `UTC` on bravo
 
+
+```bash
+# Install chrony if not present
+sudo dnf install -y chrony
+
+# Add the primary NTP source to /etc/chrony.conf
+# (comment out existing pool/server lines first for a clean config)
+sudo sed -i 's/^pool /#pool /; s/^server /#server /' /etc/chrony.conf
+echo "pool 2.rhel.pool.ntp.org iburst" | sudo tee -a /etc/chrony.conf
+
+# Verify the line was added
+grep "2.rhel.pool.ntp.org" /etc/chrony.conf
+
+# Enable and start chronyd
+sudo systemctl enable --now chronyd
+
+# Restart to apply config changes, then verify
+sudo systemctl restart chronyd
+chronyc tracking
+chronyc sources -v
+timedatectl
+
+# Timezone — alpha
+sudo timedatectl set-timezone America/Chicago
+timedatectl
+
+# Timezone — bravo
+sudo timedatectl set-timezone UTC
+timedatectl
+```
+
 ---
 
 **Task 26 — Manage Tuning Profiles** *(alpha)*
@@ -999,6 +1030,63 @@ sudo cat /root/world_writable.txt
 5. Verify the active profile
 6. Set up a **merged profile** combining `virtual-guest` and `powersave` — create a custom profile called `lab-custom` in `/etc/tuned/lab-custom/`
 7. Apply `lab-custom` as the active profile
+
+
+```bash
+# Install, enable, and start tuned
+sudo dnf install -y tuned
+sudo systemctl enable --now tuned
+
+# List all available profiles
+tuned-adm list
+
+# Show the currently active profile
+tuned-adm active
+
+# Change active profile to throughput-performance
+sudo tuned-adm profile throughput-performance
+
+# Verify the active profile
+tuned-adm active
+
+# Create the merged custom profile 'lab-custom'
+sudo mkdir -p /etc/tuned/lab-custom
+sudo tee /etc/tuned/lab-custom/tuned.conf <<'EOF'
+[main]
+summary=Custom merged profile: virtual-guest + powersave
+include=virtual-guest,powersave
+EOF
+
+# Apply lab-custom and verify
+sudo tuned-adm profile lab-custom
+
+# In RHEL 10 power-profiles-daemon (ppd) is layerd on top of
+# tuned and will override the profile after reboot if now set directly
+echo "lab-custom" | sudo tee /etc/tuned/ppd_base_profile
+sudo systemctl restart tuned
+tuned-adm active
+
+# Ensure persistence before reboot
+systemctl is-enabled tuned           # 1. enabled
+cat /etc/tuned/active_profile        # 2. your profile name
+cat /etc/tuned/profile_mode          # 3. manual
+cat /etc/tuned/ppd_base_profile      # 4. your profile name  ← RHEL 10 addition
+
+
+# Reboot and verify
+sudo reboot -h now
+
+# Verify
+tuned-adm active       # confirm lab-custom is current
+sudo tuned-adm verify  # check applied settings match the profile (may warn on VMs)
+tuned-adm list | grep lab-custom   # confirm it appears in the profile list
+```
+
+**Expected Results:**
+
+```text
+tuned-adm active  ->  Current active profile: lab-custom
+```
 
 ---
 
