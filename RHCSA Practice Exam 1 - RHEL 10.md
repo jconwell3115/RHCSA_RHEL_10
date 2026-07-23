@@ -1119,11 +1119,66 @@ tuned-adm active  ->  Current active profile: lab-custom
 5. Use `logger` to send a test message and verify it appears in the correct log file
 
 ```bash
-# /etc/systemd/journald.conf
-[Journal]
-Storage=persistent
+# Launch three background dd processes
+dd if=/dev/zero of=/dev/null &
+dd if=/dev/zero of=/dev/null &
+dd if=/dev/zero of=/dev/null &
+
+# Identify them
+ps -C dd -o pid,ni,pcpu,comm
+# or watch live:
+top -c            # press 'q' to quit
+# or:
+pidstat 1 3       # 1-sec samples, 3 times
+
+# Grab one PID to work with
+PID=$(pgrep -n dd)     # newest dd process
+echo "$PID"
+
+# Set niceness to 10 (raising nice = lower priority, allowed as user)
+renice -n 10 -p "$PID"
+
+# Set niceness to -5 (lowering nice = higher priority, requires root)
+sudo renice -n -5 -p "$PID"
+
+# Verify the nice change
+ps -o pid,ni,comm -p "$PID"
+
+# Kill all dd processes
+killall dd
+
+# Confirm none remain
+pgrep -x dd || echo "no dd processes running"
+ps -C dd
+
+# Signal lifecycle on a sleep process
+sleep 3600 &
+SPID=$!
+echo "sleep PID: $SPID"
+
+kill -SIGSTOP "$SPID"     # pause (state T)
+ps -o pid,stat,comm -p "$SPID"
+
+kill -SIGCONT "$SPID"     # resume (state S)
+ps -o pid,stat,comm -p "$SPID"
+
+kill -SIGTERM "$SPID"     # terminate
+pgrep -x sleep || echo "sleep terminated"
+
+# Launch a niced process
+nice -n 15 sleep 1000 &
+ps -o pid,stat,ni,comm -p $!
 ```
 
+Expected Results:
+
+```text
+Step 3:  NI = 10   (as regular user)
+Step 4:  NI = -5   (root required)
+Step 5:  all dd processes gone
+Step 6:  STAT T (stopped) -> S (sleeping) -> process ends
+Step 7:  new sleep with NI = 15
+```
 ---
 
 **Task 29 — Schedule Tasks** *(alpha)*
@@ -1137,6 +1192,75 @@ Storage=persistent
    - Create the timer unit: `/etc/systemd/system/hourly-check.timer`
    - Enable and start the timer
 
+```bash
+# 1. at — one-time job in 5 minutes
+# Ensure atd is running
+sudo systemctl enable --now atd
+
+# Schedule the job
+echo 'echo "Scheduled at task ran" >> /var/log/at_test.log' | at now + 5 minutes
+
+# Verify it's queued
+atq
+at -l              # same thing
+
+# 2. cron — daily job for user alice at 8:00 AM
+# Edit alice's crontab (as alice, or use -u as root)
+sudo crontab -e -u alice
+
+# Add this line:
+0 8 * * * date >> ~/cron_test.log
+
+# Verify:
+sudo crontab -l -u alice
+
+# 3. systemd timer — hourly script
+# Create the script
+sudo tee /usr/local/bin/hourly_check.sh <<'EOF'
+#!/bin/bash
+echo "$(date)" >> /var/log/hourly.log
+EOF
+sudo chmod +x /usr/local/bin/hourly_check.sh
+
+# Create the service unit
+sudo tee /etc/systemd/system/hourly-check.service <<'EOF'
+[Unit]
+Description=Hourly check script
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/hourly_check.sh
+EOF
+
+# Create the timer unit
+sudo tee /etc/systemd/system/hourly-check.timer <<'EOF'
+[Unit]
+Description=Run hourly-check every hour
+
+[Timer]
+OnCalendar=hourly
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+# Reload systemd, enable and start the TIMER (not the service)
+sudo systemctl daemon-reload
+sudo systemctl enable --now hourly-check.timer
+
+# Verify
+systemctl status hourly-check.timer
+systemctl list-timers hourly-check.timer
+```
+
+Expected Results:
+
+```text
+at:      atq shows one queued job
+cron:    crontab -l -u alice shows the 8:00 AM line
+timer:   list-timers shows hourly-check.timer with a NEXT run time
+```
 ---
 
 ### SECTION 9: Shell Scripting
