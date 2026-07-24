@@ -1281,6 +1281,56 @@ Write a script `/usr/local/bin/syscheck.sh` that:
 - If no argument or invalid argument: print usage instructions and exit with code `1`
 - Make the script executable and test each argument
 
+```bash
+sudo tee /usr/local/bin/syscheck.sh <<'EOF'
+#!/bin/bash
+
+check_cpu() {
+    echo "=== CPU Model ==="
+    lscpu | grep -i "model name" || lscpu | grep -i "^Model"
+}
+
+check_mem() {
+    echo "=== Memory ==="
+    free -h
+}
+
+check_disk() {
+    echo "=== Disk Usage ==="
+    df -hT
+}
+
+usage() {
+    echo "Usage: $0 {cpu|mem|disk|all} [more args...]" >&2
+    exit 1
+}
+
+if [ "$#" -eq 0 ]; then
+    usage
+fi
+
+for arg in "$@"; do
+    case "$arg" in
+        cpu)  check_cpu ;;
+        mem)  check_mem ;;
+        disk) check_disk ;;
+        all)  check_cpu; check_mem; check_disk ;;
+        *)    echo "Invalid argument: $arg" >&2; usage ;;
+    esac
+done
+EOF
+
+sudo chmod 755 /usr/local/bin/syscheck.sh
+
+# Test each argument
+syscheck.sh cpu
+syscheck.sh mem
+syscheck.sh disk
+syscheck.sh all
+syscheck.sh              # no arg -> usage, exit 1
+syscheck.sh badarg       # invalid -> usage, exit 1
+echo "Exit code: $?"     # should be 1 for bad/no arg
+```
 ---
 
 **Task 31 — Looping Script with User Creation** *(alpha)*
@@ -1297,12 +1347,40 @@ Write a script `/usr/local/bin/bulk_users.sh` that:
 - Use a `for` loop with command substitution
 
 ```bash
-# /root/userlist.txt
+# Create the username list
+sudo tee /root/userlist.txt <<'EOF'
 testuser1
 testuser2
 testuser3
 testuser4
 testuser5
+EOF
+
+# Create the script
+sudo tee /usr/local/bin/bulk_users.sh <<'EOF'
+#!/bin/bash
+
+for user in $(cat /root/userlist.txt); do
+    if id "$user" &>/dev/null; then
+        echo "User $user already exists"
+    else
+        useradd "$user"
+        echo "$user" | passwd --stdin "$user" &>/dev/null
+        echo "User $user created successfully"
+    fi
+done
+EOF
+
+sudo chmod +x /usr/local/bin/bulk_users.sh
+
+# Run it (needs root to create users)
+sudo /usr/local/bin/bulk_users.sh
+
+# Run again to confirm the "already exists" branch
+sudo /usr/local/bin/bulk_users.sh
+
+# Verify
+for u in $(cat /root/userlist.txt); do id "$u"; done
 ```
 
 ---
@@ -1320,6 +1398,46 @@ Write a script `/root/etcbackup.sh` that:
 
 Schedule this script to run at **11:30 PM every night except Sunday** using cron.
 
+```bash
+# Create the backup script
+sudo tee /root/etcbackup.sh <<'EOF'
+#!/bin/bash
+
+BACKUP_DIR="/root/backups"
+DATE=$(date +%F)
+ARCHIVE="etc_backup_${DATE}.tar.gz"
+LOG="/var/log/etcbackup.log"
+
+# Ensure backup dir exists
+mkdir -p "$BACKUP_DIR"
+
+# Create the compressed archive
+tar czf "${BACKUP_DIR}/${ARCHIVE}" /etc 2>/dev/null
+
+# Remove backups older than 7 days
+find "$BACKUP_DIR" -name "etc_backup_*.tar.gz" -mtime +7 -delete
+
+# Log the result
+echo "$(date '+%F %T') - Created ${ARCHIVE}" >> "$LOG"
+EOF
+
+sudo chmod +x /root/etcbackup.sh
+
+# Test it manually
+sudo /root/etcbackup.sh
+ls -l /root/backups/
+sudo cat /var/log/etcbackup.log
+
+# Schedule via root's crontab: 11:30 PM every night EXCEPT Sunday
+sudo crontab -e
+
+# Add this line:
+30 23 * * 1-6 /root/etcbackup.sh
+
+# Verify:
+
+sudo crontab -l
+```
 ---
 
 ### SECTION 10: SELinux
