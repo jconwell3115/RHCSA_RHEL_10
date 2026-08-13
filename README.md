@@ -8,8 +8,11 @@ note: Golden image build lives here; RHCA lab guide references it downstream.
 # 🧪 RHCSA Practice Exam — Environment Setup & Usage Guide
 
 > **Purpose:** Build, seed, run, and reset the lab environments for **RHCSA Practice Exam 1** (alpha/bravo) and **RHCSA Practice Exam 2** (charlie/delta).
+
 > **Platform:** libvirt/KVM on your existing RHEL host.
+
 > **Ordering note:** RHCSA comes first in your cert journey, so the **golden image build lives in this guide**. The later `[[RHCA-Practice-Lab-Node-Setup-Guide]]` reuses the same image and simply references Phase 0 here.
+
 > **Key principle:** Each exam has deliberate pre-conditions (broken passwords, extra disks, wrong boot target). Set those up before starting the timer, then snapshot-revert to retake cleanly.
 
 ---
