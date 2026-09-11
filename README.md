@@ -2,35 +2,39 @@
 title: RHCSA Practice Exam - Environment Setup & Usage Guide
 tags: [certifications, rhcsa, rhel10, lab, kvm, libvirt, practice, setup]
 created: 2026-07-08
-covers: [RHCSA Practice Exam 1, RHCSA Practice Exam 2]
+covers: [RHCSA Practice Exam 1, RHCSA Practice Exam 2, RHCSA Practice Exam 3]
 note: Golden image build lives here; RHCA lab guide references it downstream.
 ---
 # 🧪 RHCSA Practice Exam — Environment Setup & Usage Guide
 
-> **Purpose:** Build, seed, run, and reset the lab environments for **RHCSA Practice Exam 1** (alpha/bravo) and **RHCSA Practice Exam 2** (charlie/delta).
-
+> **Purpose:** Build, seed, run, and reset the lab environments for **RHCSA Practice Exam 1** (alpha/bravo), **RHCSA Practice Exam 2** (charlie/delta), and **RHCSA Practice Exam 3** (echo/foxtrot).
 > **Platform:** libvirt/KVM on your existing RHEL host.
-
 > **Ordering note:** RHCSA comes first in your cert journey, so the **golden image build lives in this guide**. The later `[[RHCA-Practice-Lab-Node-Setup-Guide]]` reuses the same image and simply references Phase 0 here.
-
 > **Key principle:** Each exam has deliberate pre-conditions (broken passwords, extra disks, wrong boot target). Set those up before starting the timer, then snapshot-revert to retake cleanly.
 
 ---
 
 ## 📊 Exam-at-a-Glance
 
-| Attribute         | Exam 1                                       | Exam 2                                         |
-| ----------------- | -------------------------------------------- | ---------------------------------------------- |
-| VMs               | `rhel10-alpha`, `rhel10-bravo`           | `rhel10-charlie`, `rhel10-delta`           |
-| Subnet            | `192.168.100.0/24`                         | `10.20.30.0/24`                              |
-| Node IPs          | alpha`.10`, bravo `.20`                  | charlie`.11`, delta `.12`                  |
-| Break-in target   | bravo (init=/bin/bash method)                | charlie (init=/bin/bash method)                |
-| Special boot      | none                                         | delta boots to`rescue.target`                |
-| Extra disks       | alpha +10G; bravo +10G, +5G                  | charlie +8G, +6G, +4G; delta +8G               |
-| Local repo source | DVD ISO attached to`alpha` as `/dev/sr0` | DVD ISO attached to`charlie` as `/dev/sr0` |
-| Tasks             | 35                                           | 35                                             |
-| Time limit        | 2.5 hrs                                      | 2.5 hrs                                        |
-| Pass mark         | 25 / 35                                      | 25 / 35                                        |
+| Attribute         | Exam 1                                       | Exam 2                                         | Exam 3                                          |
+| ----------------- | -------------------------------------------- | ---------------------------------------------- | ----------------------------------------------- |
+| VMs               | `rhel10-alpha`, `rhel10-bravo`           | `rhel10-charlie`, `rhel10-delta`           | `rhel10-echo`, `rhel10-foxtrot`             |
+| Subnet            | `192.168.100.0/24`                         | `10.20.30.0/24`                              | `172.16.40.0/24`                              |
+| Node IPs          | alpha`.10`, bravo `.20`                  | charlie`.11`, delta `.12`                  | echo`.21`, foxtrot `.22`                    |
+| Break-in target   | bravo (init=/bin/bash method)                | charlie (init=/bin/bash method)                | foxtrot (break-in **to repair a broken fstab**) |
+| Special boot      | none                                         | delta boots to`rescue.target`                | foxtrot **will not boot** (seeded bad fstab)    |
+| Extra disks       | alpha +10G; bravo +10G, +5G                  | charlie +8G, +6G, +4G; delta +8G               | echo +8G, +6G; foxtrot +8G                      |
+| Local repo source | DVD ISO attached to`alpha` as `/dev/sr0` | DVD ISO attached to`charlie` as `/dev/sr0` | DVD ISO attached to`echo` as `/dev/sr0`     |
+| Tasks             | 35                                           | 35                                             | 35 (26 cover untested objectives)               |
+| Answer key        | Separate section at end of file              | Separate section at end of file                | Separate section at end of file                 |
+| Time budget       | 3 hrs (see note)                             | 3 hrs (see note)                               | 4 hrs, or split (see note)                      |
+| Pass mark         | 25 / 35                                      | 25 / 35                                        | 25 / 35                                         |
+
+> **⏱️ On time budgets:** these papers are 35 tasks each — far more than the real EX200 presents. The original 2.5 hrs works out to ~4.3 min/task and is not achievable; Exam 3 in particular has tasks with six or seven sub-parts (T7, T9, T10, T27). Treat the budgets above as realistic, and **do not read a timer overrun as "not ready"** — that would be a false signal. For Exam 3, two timed sittings (Sections 1–6, then 7–11) is the better drill.
+>
+> Confirm the **real** EX200 duration on Red Hat's current objectives page before booking. It presents fewer, larger tasks than these papers do, so per-task pacing here does not transfer directly.
+
+> **Exam 3 build note:** `rhcsa-net3` is defined in Phase 1 alongside the other two networks, and the full-rebuild script plus the retake-reset block below both cover `echo`/`foxtrot`. The step-by-step clone/seed walkthrough for Exam 3 lives in `[[RHCSA Practice Exam 3 - RHEL 10]]` itself, since its three deliberately broken pre-conditions are specific to that exam.
 
 ---
 
@@ -277,7 +281,7 @@ sudo virsh snapshot-list rhel10-golden
 
 ## 🌐 PHASE 1 — Build the Two Isolated Networks
 
-The two exams use different subnets on purpose (Exam 2 warns about stale ARP and host-key clashes). Define both libvirt networks once.
+The three exams use different subnets on purpose (Exam 2 warns about stale ARP and host-key clashes). Define all three libvirt networks once.
 
 ```bash
 cat > /tmp/rhcsa-net1.xml <<'EOF'
@@ -308,7 +312,21 @@ cat > /tmp/rhcsa-net2.xml <<'EOF'
 </network>
 EOF
 
-for n in 1 2; do
+cat > /tmp/rhcsa-net3.xml <<'EOF'
+<network>
+  <name>rhcsa-net3</name>
+  <forward mode='nat'/>
+  <bridge name='virbr-rhcsa3' stp='on' delay='0'/>
+  <domain name='ex200.net'/>
+  <ip address='172.16.40.1' netmask='255.255.255.0'>
+    <dhcp>
+      <range start='172.16.40.100' end='172.16.40.199'/>
+    </dhcp>
+  </ip>
+</network>
+EOF
+
+for n in 1 2 3; do
   sudo virsh net-define /tmp/rhcsa-net${n}.xml
   sudo virsh net-autostart rhcsa-net${n}
   sudo virsh net-start rhcsa-net${n}
@@ -323,13 +341,15 @@ sudo virsh net-list --all
 
 ## 🔧 PHASE 2 — Helper Script: Attach Extra Disks
 
-Both exams need multiple raw disks attached unpartitioned. Save as `/usr/local/bin/add-disk.sh`:
+All three exams need multiple raw disks attached unpartitioned. Save as `~/my_work_tools/bin/bash/add-disk.sh` (that is the path every phase below invokes):
+
+> **Always pass a `vdX` target.** The script attaches on the **virtio** bus, so the guest names the disk `/dev/vdb`, `/dev/vdc`, … Passing `sdb` here would be misleading — the guest still sees `vdb`, and every exam's task text says `/dev/vdX`.
 
 ```bash
-#!usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 VM="${1:?usage: add-disk.sh <vm> <target-dev> <size-GB>}"
-DEV="${2:?e.g. sdb}"
+DEV="${2:?e.g. vdb}"
 SIZE="${3:?e.g. 10}"
 
 IMG="/home/libvirt/images/${VM}-${DEV}.qcow2"
@@ -538,10 +558,10 @@ sudo virt-customize -d rhel10-delta   --hostname rhel10-delta
 ### 4.4 — Attach extra disks
 
 ```bash
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdb 8
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdc 6
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdd 4
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-delta   sdb 8
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie vdb 8
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie vdc 6
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie vdd 4
+sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-delta   vdb 8
 ```
 
 ### 4.5 — Seed the break-in condition on charlie
@@ -608,26 +628,47 @@ Or use the Cockpit Virtual Machines UI in a browser at `https://<kvm-host>:9090`
 
 ### Exam-day rules
 
-1. Start a real 150-minute timer. No pausing.
+1. Start a real timer — **180 minutes** for Exams 1 and 2, **240 minutes** for Exam 3 (or split it into two sittings). No pausing.
 2. No internet — only `man`, `info`, `/usr/share/doc`.
 3. Type every command; no copy-paste from the exam file.
-4. Work the correct host — tasks are tagged `(alpha)`, `(bravo)`, `(both)` in Exam 1 and `(charlie)`, `(delta)`, `(both)` in Exam 2.
-5. Reboot-test critical tasks as you go — a broken `fstab` can block boot.
-6. Budget roughly 4.3 minutes per task; flag anything over 8 minutes and move on.
+4. **Do not scroll past the Grading Checklist.** All three exams now keep their answer key in a single section at the end — that is the whole point of the format.
+5. Work the correct host — tasks are tagged `(alpha)`/`(bravo)` in Exam 1, `(charlie)`/`(delta)` in Exam 2, `(echo)`/`(foxtrot)` in Exam 3.
+6. Reboot-test critical tasks as you go — a broken `fstab` can block boot.
+7. Flag anything over 10 minutes and move on. Coming back to a flagged task beats grinding.
 
-### Suggested pacing
+### Suggested pacing — Exams 1 & 2 (180 min)
 
 | Phase                 | Time budget | Tasks                     |
 | --------------------- | ----------- | ------------------------- |
 | Read-through          | 5 min       | Skim all 35               |
-| Boot/recovery + net   | 25 min      | 1–5                      |
-| Users/perms/SSH       | 25 min      | 6–12                     |
-| Software management   | 15 min      | 13–15                    |
-| Storage (heaviest)    | 35 min      | 16–24                    |
-| Services/logging/time | 20 min      | 25–29                    |
-| Scripting             | 10 min      | 30–32                    |
-| SELinux + containers  | 10 min      | 33–35                    |
+| Boot/recovery + net   | 30 min      | 1–5                      |
+| Users/perms/SSH       | 30 min      | 6–12                     |
+| Software management   | 20 min      | 13–15                    |
+| Storage (heaviest)    | 40 min      | 16–24                    |
+| Services/logging/time | 25 min      | 25–29                    |
+| Scripting             | 15 min      | 30–32                    |
+| SELinux + containers  | 30 min      | 33–35                    |
 | Reserve / verify      | 5 min       | Final reboot + spot-check |
+
+### Suggested pacing — Exam 3 (240 min, or two sittings)
+
+Exam 3 is heavier per task: Sections 2 and 8 are multi-part answer-capture tasks, and Tasks 1, 4 and 33 are open-ended diagnosis with no hint of the cause.
+
+| Phase                        | Time budget | Tasks  | Sitting |
+| ---------------------------- | ----------- | ------ | ------- |
+| Read-through                 | 5 min       | All 35 | 1       |
+| Boot failure + service diag  | 40 min      | 1–5    | 1       |
+| Essential tools              | 45 min      | 6–10   | 1       |
+| Users/perms/SELinux contexts | 30 min      | 11–14  | 1       |
+| Networking                   | 20 min      | 15–16  | 1       |
+| Software management          | 25 min      | 17–19  | 2       |
+| Storage                      | 40 min      | 20–24  | 2       |
+| NFS + AutoFS                 | 15 min      | 25–26  | 2       |
+| Services/logging/scheduling  | 25 min      | 27–30  | 2       |
+| Scripting                    | 20 min      | 31–32  | 2       |
+| SELinux diagnosis            | 25 min      | 33–34  | 2       |
+| Containers                   | 15 min      | 35     | 2       |
+| Reserve / verify             | 10 min      | Reboot + run the verify script | 2 |
 
 ---
 
@@ -646,10 +687,17 @@ Wait for both to return, then verify each persistence-marked task.
 
 ### Self-grading workflow
 
-1. Walk the Grading Checklist table in each exam file.
-2. Mark a task done only if it persisted through reboot where applicable.
-3. Tally the score. Pass is 25/35.
-4. Log the result in your weekly review note.
+1. **Reboot both hosts first.** Nothing is scored before a reboot.
+2. Run the exam's **Quick Verification Script** on each host — all three exams now carry one, in a section just after their Grading Checklist:
+   - `ex1-verify.sh` — alpha / bravo
+   - `ex2-verify.sh` — charlie / delta
+   - `ex3-verify.sh` — echo / foxtrot
+3. Walk the Grading Checklist for the tasks the script can't judge (SSH key auth, file transfers, script behaviour, documentation answers).
+4. Mark a task done only if it persisted through reboot where applicable.
+5. Tally the score. Pass is 25/35.
+6. Log the result in your weekly review note.
+
+> **Why the scripts matter more than the checklist:** self-grading from a checklist is the weak link in this whole practice loop — it is easy to tick "done" on something that looked right at the time but didn't actually persist. The scripts check the objectively-verifiable, persistence-sensitive items and will catch exactly that class of mistake. They are a safety net, not a full grader.
 
 ### Optional automated grader
 
@@ -714,6 +762,18 @@ done
 echo "Exam 2 reset to pristine."
 ```
 
+```bash
+# Exam 3 reset
+for vm in rhel10-echo rhel10-foxtrot; do
+  sudo virsh destroy "${vm}" 2>/dev/null || true
+  sudo virsh snapshot-revert "${vm}" exam3-ready
+  sudo virsh start "${vm}"
+done
+echo "Exam 3 reset to pristine (foxtrot will NOT boot — that is Task 1)."
+```
+
+> **Exam 3 reverts matter more than the others.** Its pre-conditions are three deliberately broken states (bad fstab, failing unit, two unlabeled SELinux objects). Once you have fixed them, the exam cannot be retaken without a revert — there is no way to "undo" the repairs by hand and be sure you got back to the seeded state.
+
 > Reverting takes about 2 seconds versus roughly 20 minutes to rebuild. This is the single biggest time-saver in your practice loop.
 
 ---
@@ -724,10 +784,11 @@ For rebuilding everything from scratch after a golden-image update:
 
 ```bash
 #!/usr/bin/env bash
-# rebuild-rhcsa-labs.sh — full teardown + rebuild of both exam environments
+# rebuild-rhcsa-labs.sh — full teardown + rebuild of ALL THREE exam environments
 set -euo pipefail
 
 POOL=/home/libvirt/images
+ADDDISK=~/my_work_tools/bin/bash/add-disk.sh
 
 teardown() {
   for vm in "$@"; do
@@ -737,7 +798,7 @@ teardown() {
 }
 
 echo "== Tearing down existing exam VMs =="
-teardown rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta
+teardown rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta rhel10-echo rhel10-foxtrot
 
 echo "== Cloning Exam 1 VMs =="
 sudo virt-clone --original rhel10-golden --name rhel10-alpha --file ${POOL}/rhel10-alpha.qcow2
@@ -747,41 +808,91 @@ echo "== Cloning Exam 2 VMs =="
 sudo virt-clone --original rhel10-golden --name rhel10-charlie --file ${POOL}/rhel10-charlie.qcow2
 sudo virt-clone --original rhel10-golden --name rhel10-delta   --file ${POOL}/rhel10-delta.qcow2
 
+echo "== Cloning Exam 3 VMs =="
+sudo virt-clone --original rhel10-golden --name rhel10-echo    --file ${POOL}/rhel10-echo.qcow2
+sudo virt-clone --original rhel10-golden --name rhel10-foxtrot --file ${POOL}/rhel10-foxtrot.qcow2
+
 echo "== Networking =="
 sudo virsh attach-interface rhel10-alpha   network rhcsa-net1 --model virtio --config
 sudo virsh attach-interface rhel10-bravo   network rhcsa-net1 --model virtio --config
 sudo virsh attach-interface rhel10-charlie network rhcsa-net2 --model virtio --config
 sudo virsh attach-interface rhel10-delta   network rhcsa-net2 --model virtio --config
+sudo virsh attach-interface rhel10-echo    network rhcsa-net3 --model virtio --config
+sudo virsh attach-interface rhel10-foxtrot network rhcsa-net3 --model virtio --config
 
 echo "== Hostnames =="
 sudo virt-customize -d rhel10-alpha   --hostname rhel10-alpha
 sudo virt-customize -d rhel10-bravo   --hostname rhel10-bravo
 sudo virt-customize -d rhel10-charlie --hostname rhel10-charlie
 sudo virt-customize -d rhel10-delta   --hostname rhel10-delta
+sudo virt-customize -d rhel10-echo    --hostname rhel10-echo
+sudo virt-customize -d rhel10-foxtrot --hostname rhel10-foxtrot
 
-echo "== Disks =="
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-alpha   sdb 10
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo   sdb 10
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo   sdc 5
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdb 8
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdc 6
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdd 4
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-delta   sdb 8
+echo "== Disks (virtio bus -> guest sees /dev/vdX) =="
+sudo "$ADDDISK" rhel10-alpha   vdb 10
+sudo "$ADDDISK" rhel10-bravo   vdb 10
+sudo "$ADDDISK" rhel10-bravo   vdc 5
+sudo "$ADDDISK" rhel10-charlie vdb 8
+sudo "$ADDDISK" rhel10-charlie vdc 6
+sudo "$ADDDISK" rhel10-charlie vdd 4
+sudo "$ADDDISK" rhel10-delta   vdb 8
+sudo "$ADDDISK" rhel10-echo    vdb 8
+sudo "$ADDDISK" rhel10-echo    vdc 6
+sudo "$ADDDISK" rhel10-foxtrot vdb 8
 
-echo "== Attaching DVD ISO for Task 13 (alpha + charlie) =="
-for vm in rhel10-alpha rhel10-charlie; do
+echo "== Attaching DVD ISO for the repo tasks (alpha + charlie + echo) =="
+# 'sda' here is the CD-ROM device, not a data disk — it stays sdX.
+for vm in rhel10-alpha rhel10-charlie rhel10-echo; do
   sudo virsh attach-disk "${vm}" \
     /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso \
     sda --type cdrom --mode readonly --config
 done
 
-echo "== Seeding exam pre-conditions =="
+echo "== Seeding Exam 1 + 2 pre-conditions =="
 sudo virt-customize -d rhel10-bravo   --root-password "password:$(openssl rand -base64 24)"
 sudo virt-customize -d rhel10-charlie --root-password "password:$(openssl rand -base64 24)"
 sudo virt-customize -d rhel10-delta   --run-command 'systemctl set-default rescue.target'
 
+echo "== Seeding Exam 3 pre-conditions (offline, via virt-customize) =="
+# foxtrot: unbootable fstab + unknown root password (Task 1)
+sudo virt-customize -d rhel10-foxtrot \
+  --root-password "password:$(openssl rand -base64 24)" \
+  --append-line '/etc/fstab:UUID=deadbeef-0000-0000-0000-000000000000 /mnt/archive xfs defaults 0 0'
+
+# echo: a unit that fails on boot (Task 4)
+sudo virt-customize -d rhel10-echo \
+  --write '/etc/systemd/system/labdata.service:[Unit]
+Description=Lab Data Collector
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/labdata-collect --daemon
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target' \
+  --run-command 'systemctl enable labdata.service'
+
+# echo: httpd seeded into TWO SELinux violations (Task 33)
+sudo virt-customize -d rhel10-echo \
+  --run-command 'dnf install -y httpd policycoreutils-python-utils setroubleshoot-server || true' \
+  --mkdir /srv/intranet \
+  --write '/srv/intranet/index.html:Echo Intranet OK' \
+  --write '/etc/httpd/conf.d/intranet.conf:Listen 8404
+<VirtualHost *:8404>
+    DocumentRoot /srv/intranet
+    <Directory /srv/intranet>
+        Require all granted
+    </Directory>
+</VirtualHost>' \
+  --run-command 'systemctl enable httpd' \
+  --run-command 'firewall-offline-cmd --add-port=8404/tcp || true'
+# Deliberately NOT labeling /srv/intranet and NOT labeling port 8404 — that is Task 33.
+
 echo "== Starting VMs =="
-for vm in rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta; do
+# foxtrot is expected to drop to emergency — that IS Exam 3 Task 1.
+for vm in rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta rhel10-echo rhel10-foxtrot; do
   sudo virsh start "${vm}"
 done
 
@@ -790,9 +901,15 @@ sudo virsh snapshot-create-as rhel10-alpha   exam1-ready "Exam 1 pristine"
 sudo virsh snapshot-create-as rhel10-bravo   exam1-ready "Exam 1 pristine"
 sudo virsh snapshot-create-as rhel10-charlie exam2-ready "Exam 2 pristine"
 sudo virsh snapshot-create-as rhel10-delta   exam2-ready "Exam 2 pristine"
+sudo virsh snapshot-create-as rhel10-echo    exam3-ready "Exam 3 pristine: labdata + SELinux seeded"
+sudo virsh snapshot-create-as rhel10-foxtrot exam3-ready "Exam 3 pristine: fstab broken + root scrambled"
 
-echo "== DONE. Both exam environments ready. =="
+echo "== DONE. All three exam environments ready. =="
 ```
+
+> **⚠️ Run this after every golden-image update.** Before Exam 3 existed this script only rebuilt alpha/bravo/charlie/delta — running it left `echo`/`foxtrot` as stale clones of the *previous* golden image, with an `exam3-ready` snapshot pointing at pre-update state. You would then be practicing Exam 3 on a different base OS than Exams 1 and 2 without noticing.
+>
+> The Exam 3 seeding above is the `virt-customize` (offline) equivalent of the boot-and-run-by-hand blocks in `[[RHCSA Practice Exam 3 - RHEL 10]]`. Either path works — use whichever you prefer, but not both.
 
 ---
 
@@ -800,10 +917,13 @@ echo "== DONE. Both exam environments ready. =="
 
 | Symptom                                                              | Cause / Fix                                                                                                                                        |
 | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Disks show as`/dev/vdb` not `/dev/sdb`                           | Used virtio bus. Re-attach with SATA bus, or adapt the task text                                                                                   |
+| Disks show as`/dev/vdb`, not `/dev/sdb`                          | **Expected.** `add-disk.sh` attaches on the virtio bus, so the guest always names data disks `vdX`. All three exams' task text says `/dev/vdX` — pass `vdb`/`vdc`/`vdd` to the script and leave it alone |
 | delta boots to multi-user, not rescue                                | `set-default rescue.target` did not apply — re-run the virt-customize step                                                                      |
 | Cannot break into bravo/charlie                                      | Password was not scrambled — re-run with a fresh`openssl rand`                                                                                  |
-| Both exams' VMs see each other                                       | Wrong network — alpha/bravo on`rhcsa-net1`, charlie/delta on `rhcsa-net2`                                                                     |
+| Exam VMs from different exams see each other                         | Wrong network — alpha/bravo on`rhcsa-net1`, charlie/delta on `rhcsa-net2`, echo/foxtrot on `rhcsa-net3`                                   |
+| foxtrot drops to an emergency prompt on first boot                   | **Expected** — that is Exam 3 Task 1. Do not "fix" it during setup                                                                                 |
+| `rhcsa-net3` undefined when building Exam 3                        | Phase 1 defines all three — re-run its net3 block, then`virsh net-list --all` to confirm it is active                                           |
+| Exam 3 VMs are on an older OS than Exams 1 & 2                       | The full-rebuild script was run before it covered echo/foxtrot — re-run the current version, which rebuilds all six                                 |
 | `snapshot-revert` fails: domain running                            | Run`virsh destroy <vm>` first, then revert                                                                                                       |
 | Static IP task breaks SSH access                                     | Expected — use`virsh console` until the network task is done                                                                                    |
 | Reboot test wipes a completed task                                   | The task was not made persistent — redo it correctly                                                                                              |
@@ -823,22 +943,24 @@ echo "== DONE. Both exam environments ready. =="
 
 Per `[[RHCA-Ansible-Cert-Path-Timeline]]`:
 
-- RHCSA (EX200) is the prerequisite, targeted mid-September 2026.
+- RHCSA (EX200) is the prerequisite, **targeted mid-October 2026** *(moved from mid-September — European travel disrupted study more than planned)*.
 - Use Exam 1 first (foundational methods: rd.break, fdisk, simple LVM).
 - Use Exam 2 second (advanced variants: init=/bin/bash, parted, striped LVM, ACLs, rich rules).
-- Aim to pass both practice exams at 30/35 or better before booking the real EX200.
+- Use Exam 3 third (gap-fill: recovery, diagnosis, essential tools, skopeo — answer key is separated, so it is the only one that tests recall).
+- Aim to pass all three practice exams at 30/35 or better before booking the real EX200.
 - The `rhel10-golden` image built in Phase 0 is reused by the RHCA lab — the RHCA guide references it rather than rebuilding.
 
-### Recommended drill cadence (pre-September)
+### Recommended drill cadence (Sep 9 → mid-October 2026)
 
-| Week        | Activity                                                 |
-| ----------- | -------------------------------------------------------- |
-| Aug, week 1 | Full timed run of Exam 1; self-grade; note weak sections |
-| Aug, week 2 | Revert; redo only failed tasks; full re-run              |
-| Aug, week 3 | Full timed run of Exam 2 (harder variants)               |
-| Aug, week 4 | Revert; redo failed tasks; mixed drill of both           |
-| Sep, week 1 | Both exams back-to-back at 30/35+; book real EX200       |
-| Sep, week 2 | Light review; take real EX200                            |
+| Week           | Dates          | Activity                                                                  |
+| -------------- | -------------- | ------------------------------------------------------------------------- |
+| Sep, week 2    | Sep 9–15       | Build echo/foxtrot; full timed run of **Exam 3** cold; self-grade          |
+| Sep, week 3    | Sep 16–22      | Re-run **Exams 1 and 2 cold** — solutions covered. Recall, not recognition |
+| Sep, week 4    | Sep 23–29      | Re-run Exam 3; drill only what failed twice across all three               |
+| Sep 30 – Oct 6 | Oct, week 1    | All three back-to-back at 30/35+; **book the real EX200**                  |
+| Oct, week 2    | Oct 7–14       | Light review; weak-area drills only; take real EX200                      |
+
+> **Why the order changed:** Exams 1 and 2 were originally worked with their answers inline, which trains recognition. Exam 3 hides its key, so running it *first* gives an honest baseline — then Exams 1 and 2 get re-run cold to close the same gap.
 
 ---
 
@@ -846,6 +968,7 @@ Per `[[RHCA-Ansible-Cert-Path-Timeline]]`:
 
 - 📄 `[[RHCSA Practice Exam 1 - RHEL 10]]` — 35 tasks, alpha/bravo
 - 📄 `[[RHCSA Practice Exam 2 - RHEL 10]]` — 35 tasks, charlie/delta
+- 📄 `[[RHCSA Practice Exam 3 - RHEL 10]]` — 35 tasks, echo/foxtrot; gap-fill, answer key at end
 - 📄 `[[RHCA-Practice-Lab-Node-Setup-Guide]]` — reuses the golden image from Phase 0 here
 - 📄 `[[RHCA-Ansible-Cert-Path-Timeline]]` — where RHCSA fits in the RHCA journey
 
