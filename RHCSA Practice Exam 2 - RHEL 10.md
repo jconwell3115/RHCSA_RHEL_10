@@ -1,10 +1,21 @@
+---
+title: RHCSA Practice Exam 2 - RHEL 10
+tags: [certifications, rhcsa, rhel10, practice, linux]
+created: 2026-07-08
+restructured: 2026-09-09 - answer key moved to bottom for cold re-runs
+note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading Checklist during a timed run.
+---
 
 # 🧪 RHCSA Practice Exam #2 — RHEL 10 (EX200)
 
-> **Format:** Performance-based | **Time Limit:** 2.5 hours | **Pass Score:** ~70%
+> **Format:** Performance-based | **Time budget:** 3 hours | **Pass Score:** ~70% (25 / 35)
 > All configurations **must persist after reboot** without intervention.
 > You may use `man`, `info`, and `/usr/share/doc` — no internet access on exam day.
 > This exam re-tests the same objectives as Exam #1 using different scenarios, values, and services.
+
+> **⏱️ Budget is 3 hours, not 2.5.** 35 tasks at 2.5 hrs works out to ~4.3 min/task, which is not achievable. Don't read a timer overrun as "not ready" — the real EX200 presents far fewer, larger tasks. Confirm the real exam's current duration on Red Hat's objectives page.
+
+> **📌 Answer key is at the end of this file, not under each task.** Solutions and the command quick-reference were moved on 2026-09-09 so this exam can be re-run cold.
 
 ---
 
@@ -12,10 +23,10 @@
 
 ### Required Virtual Machines
 
-| VM              | vCPU | RAM  | Primary Disk       | Extra Disks                                            |
-| --------------- | ---- | ---- | ------------------ | ------------------------------------------------------ |
-| `rhel10-charlie`  | 2    | 2 GB | 20 GB `/dev/vda`   | 8 GB `/dev/vdb`, 6 GB `/dev/vdc`, 4 GB `/dev/vdd`      |
-| `rhel10-delta`  | 2    | 2 GB | 20 GB `/dev/vda`   | 8 GB `/dev/vdb`                                        |
+| VM                 | vCPU | RAM  | Primary Disk      | Extra Disks                                            |
+| ------------------ | ---- | ---- | ----------------- | ------------------------------------------------------ |
+| `rhel10-charlie` | 2    | 2 GB | 20 GB`/dev/vda` | 8 GB`/dev/vdb`, 6 GB `/dev/vdc`, 4 GB `/dev/vdd` |
+| `rhel10-delta`   | 2    | 2 GB | 20 GB`/dev/vda` | 8 GB`/dev/vdb`                                       |
 
 ### VM Configuration Notes
 
@@ -43,6 +54,7 @@
 3. Work methodically; a wrong `fstab` entry can break boot
 4. Do NOT delete pre-existing users, groups, files, or services unless explicitly told to
 5. If a task depends on a previous one and you cannot complete the previous, **still attempt the current one** on a plausible substitute
+6. **Do not scroll to the answer key.** If you're stuck, use `man` — that's the skill being tested
 
 ---
 
@@ -64,9 +76,7 @@ The root password on `rhel10-charlie` is unknown. This time, use the **`init=/bi
 2. Boot to a raw bash shell
 3. Reset the root password to `Ex200Pass!`
 4. Ensure SELinux will relabel on next boot
-5. Reboot cleanly (`exec /sbin/init` or force sync + reboot)
-
-**Hint:** Different from `rd.break` — you skip systemd entirely. `mount -o remount,rw /` may still be needed.
+5. Reboot cleanly
 
 ---
 
@@ -76,9 +86,7 @@ The root password on `rhel10-charlie` is unknown. This time, use the **`init=/bi
 
 `rhel10-delta` is booting into `rescue.target`. Change the default target to `graphical.target` and reboot. Verify with `systemctl get-default` and confirm `runlevel` output shows `5`.
 
-Then, install the required package group if the GUI is not present:
-
-    dnf group install "Server with GUI"
+Then install the required package group if the GUI is not present.
 
 ---
 
@@ -87,6 +95,7 @@ Then, install the required package group if the GUI is not present:
 > Objective: Modify the system bootloader
 
 On `charlie`, edit GRUB with the following persistent changes:
+
 - Remove `rhgb` and `quiet` from `GRUB_CMDLINE_LINUX`
 - Add `audit=1` and `net.ifnames=0`
 - Set `GRUB_TIMEOUT=5`
@@ -103,10 +112,10 @@ Regenerate GRUB using `grub2-mkconfig` **and** rebuild the initramfs with `dracu
 
 > Objective: Configure IPv4 and IPv6 addresses, Configure hostname resolution
 
-| Host  | Hostname            | IPv4              | IPv6            | Gateway    | DNS                     |
-| ----- | ------------------- | ----------------- | --------------- | ---------- | ----------------------- |
-| charlie | `charlie.ex200.lab`   | `10.20.30.11/24`  | `fd42::11/64`   | `10.20.30.1` | `10.20.30.1, 1.1.1.1` |
-| delta | `delta.ex200.lab`   | `10.20.30.12/24`  | `fd42::12/64`   | `10.20.30.1` | `10.20.30.1, 1.1.1.1` |
+| Host    | Hostname              | IPv4               | IPv6            | Gateway        | DNS                     |
+| ------- | --------------------- | ------------------ | --------------- | -------------- | ----------------------- |
+| charlie | `charlie.ex200.lab` | `10.20.30.11/24` | `fd42::11/64` | `10.20.30.1` | `10.20.30.1, 1.1.1.1` |
+| delta   | `delta.ex200.lab`   | `10.20.30.12/24` | `fd42::12/64` | `10.20.30.1` | `10.20.30.1, 1.1.1.1` |
 
 - Set the connection to autoconnect at boot
 - Add a **connection alias** named `lab-static` on both nodes
@@ -120,6 +129,7 @@ Regenerate GRUB using `grub2-mkconfig` **and** rebuild the initramfs with `dracu
 > Objective: Restrict network access using firewall-cmd/firewalld
 
 On `charlie`:
+
 1. Create a **new permanent zone** called `labzone`
 2. Assign the `lab-static` connection to `labzone`
 3. In `labzone`, permanently allow:
@@ -176,6 +186,7 @@ Verify home directories exist, permissions are `700`, and use `getent` to confir
 > Objective: Configure privileged access
 
 Create `/etc/sudoers.d/lab_sudo`:
+
 - User_Alias `OPSTEAM = emma, gina`
 - User_Alias `QAUSERS = frank`
 - Cmnd_Alias `NETADMIN = /usr/bin/nmcli, /usr/sbin/ip, /usr/sbin/ss`
@@ -193,10 +204,11 @@ Validate with `visudo -cf /etc/sudoers.d/lab_sudo` and `sudo -l -U emma`.
 > Objective: List, set, and change standard ugo/rwx permissions (extended via ACLs)
 
 Create `/srv/project/phoenix`:
+
 - Owned by `gina:ops`, mode `2770` (SGID)
 - Grant `frank` **rwx** via ACL (default + access ACL)
 - Grant the `auditors` group **read-only** access via ACL (default + access ACL)
-- Deny `henry` all access with a mask/ACL entry
+- Deny `henry` all access with an ACL entry
 - Verify with `getfacl /srv/project/phoenix`
 - Have `gina` create a file inside and confirm `frank` can edit it and `henry` cannot read it
 
@@ -207,11 +219,13 @@ Create `/srv/project/phoenix`:
 > Objective: Manage default file permissions, Create hard and soft links
 
 On `charlie`:
+
 - Set the default `umask` for members of `ops` to `0027` (group readable, world excluded)
 - Leave all other users at the distribution default
 - Do this via a drop-in file in `/etc/profile.d/`
 
 On `delta`:
+
 - Create `/opt/data/original.txt` with content `"exam data"`
 - Create a **hard link** `/opt/data/hardlink.txt`
 - Create a **symbolic link** `/root/softlink.txt` → `/opt/data/original.txt`
@@ -265,7 +279,7 @@ On `delta`:
 3. Both must have `gpgcheck=1` — import the GPG key from `/mnt/rhel10/RPM-GPG-KEY-redhat-release`
 4. Set `enabled=1` and `metadata_expire=1h`
 5. Priority: BaseOS = `10`, AppStream = `20` (`dnf-plugin-priorities` if needed)
-6. Confirm with `dnf repolist enabled` and `dnf --disablerepo="*" --enablerepo="lab-baseos" list available | head`
+6. Confirm with `dnf repolist enabled` and by listing packages available from `lab-baseos` only
 
 ---
 
@@ -274,28 +288,27 @@ On `delta`:
 > Objective: Configure access to Flatpak repositories, Install and remove Flatpak software packages
 
 1. Install `flatpak` from RPM
-2. Add the **Flathub** remote system-wide (not per-user):
-   `flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo`
+2. Add the **Flathub** remote system-wide (not per-user)
 3. Search for the app `gedit` (or `org.gnome.gedit`)
 4. Install it system-wide
 5. List installed Flatpak apps
-6. Uninstall it and remove unused runtimes with `flatpak uninstall --unused`
+6. Uninstall it and remove unused runtimes
 
 *(If no internet: document steps in `/root/flatpak_procedure.txt` and skip installation.)*
 
 ---
 
-**Task 15 — RPM Verification + Downgrade** *(charlie)*
+**Task 15 — RPM Verification + Reinstall** *(charlie)*
 
 > Objective: Install and update software packages (RPM level)
 
 1. Install `nano` and record its version
-2. Use `rpm -V nano` — should be clean
-3. Modify `/etc/nanorc` (add a comment) and run `rpm -V nano` again — confirm the `5` (checksum) flag appears
-4. Restore the config file: `dnf reinstall nano`
-5. Query which package owns `/etc/hosts` (`rpm -qf`)
-6. Query all files installed by the `chrony` package (`rpm -ql`)
-7. List all installed packages sorted by install date (`rpm -qa --last | head`)
+2. Verify the installed package reports no modifications — output should be clean
+3. Modify `/etc/nanorc` (add a comment) and verify again — confirm the `5` (checksum) flag appears
+4. Restore the config file to its packaged state
+5. Query which package owns `/etc/hosts`
+6. Query all files installed by the `chrony` package
+7. List all installed packages sorted by install date
 
 ---
 
@@ -311,17 +324,12 @@ Using **`parted` in non-interactive mode** (not `fdisk`/`gdisk`) on `/dev/vdb`:
 
 1. Create GPT label
 2. Create partitions:
+
    - `vdb1`: 2 GiB — for XFS
    - `vdb2`: 1 GiB — for swap
    - `vdb3`: rest of disk — for LVM (flag: `lvm`)
 3. Verify alignment with `parted /dev/vdb align-check optimal 1`
 4. Run `partprobe /dev/vdb`
-
-    parted -s /dev/vdb mklabel gpt
-    parted -s /dev/vdb mkpart primary xfs 1MiB 2049MiB
-    parted -s /dev/vdb mkpart primary linux-swap 2049MiB 3073MiB
-    parted -s /dev/vdb mkpart primary 3073MiB 100%
-    parted -s /dev/vdb set 3 lvm on
 
 ---
 
@@ -372,16 +380,11 @@ This exam variant uses a **swap file** instead of a swap partition:
 
 > Objective: Extend existing logical volumes; move data non-destructively
 
-1. Use `pvmove` to migrate all extents off `/dev/vdd`
+1. Migrate all extents off `/dev/vdd`. A plain `pvmove` **will fail here** — work out why, and find the flag that makes it succeed
 2. Remove `/dev/vdd` from `vg_lab2` (`vgreduce`)
 3. Wipe the LVM signature from `/dev/vdd` (`pvremove`, `wipefs -a`)
 4. Extend `lv_home2` to **use all remaining free space** in `vg_lab2` in a **single command** and grow the XFS filesystem online
-5. Confirm with `df -h /mnt/home2`
-
-    pvmove /dev/vdd
-    vgreduce vg_lab2 /dev/vdd
-    pvremove /dev/vdd
-    lvextend -l +100%FREE -r /dev/vg_lab2/lv_home2
+5. Confirm with `df -h /mnt/home2` and `lvs -a -o+devices` — note what happened to `lv_stripe`'s segment type
 
 ---
 
@@ -394,13 +397,13 @@ This exam variant uses a **swap file** instead of a swap partition:
 > Objective: Mount and unmount network file systems using NFS
 
 On `delta` (NFS server):
+
 1. Install `nfs-utils`
-2. Disable NFSv3 — configure `/etc/nfs.conf`:
-   - `[nfsd] vers3=n`, `vers4=y`, `vers4.2=y`
+2. Disable NFSv3 via `/etc/nfs.conf` — v3 off, v4 and v4.2 on
 3. Create `/srv/nfs/projects` and `/srv/nfs/archive`
-4. `/etc/exports`:
-   - `/srv/nfs/projects  10.20.30.0/24(rw,sync,sec=sys,no_subtree_check)`
-   - `/srv/nfs/archive   charlie.ex200.lab(ro,sync,sec=sys,root_squash)`
+4. Export them:
+   - `/srv/nfs/projects` — read/write to `10.20.30.0/24`, `sync`, `sec=sys`, `no_subtree_check`
+   - `/srv/nfs/archive` — read-only to `charlie.ex200.lab`, `sync`, `sec=sys`, `root_squash`
 5. Firewall: allow `nfs` service permanently
 6. Start/enable `nfs-server`; validate with `exportfs -v` and `showmount -e localhost`
 
@@ -411,10 +414,9 @@ On `delta` (NFS server):
 > Objective: Mount and unmount network file systems using NFS
 
 On `charlie`:
+
 1. Mount points: `/mnt/projects` and `/mnt/archive`
-2. `/etc/fstab` entries:
-   - `delta:/srv/nfs/projects  /mnt/projects  nfs4  _netdev,nofail,rw  0 0`
-   - `delta:/srv/nfs/archive   /mnt/archive   nfs4  _netdev,nofail,ro  0 0`
+2. Add persistent `/etc/fstab` entries mounting both exports as `nfs4`, with `_netdev` and `nofail`; projects read/write, archive read-only
 3. Run `systemctl daemon-reload && mount -a`
 4. Create a file in `/mnt/projects` as `root` — expect success
 5. Try in `/mnt/archive` — expect read-only failure
@@ -428,10 +430,8 @@ On `charlie`:
 Configure autofs to mount user home directories from `delta:/srv/nfs/homes/<user>` under `/net/homes/<user>`:
 
 1. Install `autofs`
-2. Create `/etc/auto.master.d/labhome.autofs`:
-   `/net/homes  /etc/auto.labhome  --timeout=60 --ghost`
-3. Create `/etc/auto.labhome`:
-   `*  -fstype=nfs4,rw,soft  delta.ex200.lab:/srv/nfs/homes/&`
+2. Create a master map entry for `/net/homes` with a `60`-second timeout and `--ghost` enabled
+3. Create the indirect map file using a wildcard key so any username resolves to its export
 4. On `delta`: create `/srv/nfs/homes/emma`, add to exports, reload
 5. On `charlie`: `su - emma`, then `ls /net/homes/emma` should trigger the mount
 6. Wait 60 seconds idle — mount should auto-unmount
@@ -450,8 +450,6 @@ The application at `/opt/finance/` has been broken by a bad `chmod`. Fix these i
 4. `/opt/finance/private/` — must be `0700`, owned by `gina:gina`
 5. Find every SUID binary under `/usr/bin` and save to `/root/suid_list.txt`
 
-    find /usr/bin -perm -4000 -type f > /root/suid_list.txt
-
 ---
 
 ### SECTION 8: System Services, Logging & Time
@@ -462,7 +460,7 @@ The application at `/opt/finance/` has been broken by a bad `chmod`. Fix these i
 
 > Objective: Configure time service clients
 
-- On `delta`: configure `chrony` as an **NTP server** for the `10.20.30.0/24` subnet (`allow 10.20.30.0/24`). Enable and start `chronyd`, open firewall for `ntp`.
+- On `delta`: configure `chrony` as an **NTP server** for the `10.20.30.0/24` subnet. Enable and start `chronyd`, open firewall for `ntp`.
 - On `charlie`: configure `chrony` client to use **delta only** as its time source; remove pool/server defaults.
 - Verify with `chronyc sources -v` on charlie — delta should appear with `^*` or `^+`.
 - Set timezone: `charlie` → `Europe/London`, `delta` → `Asia/Tokyo`.
@@ -479,7 +477,7 @@ The application at `/opt/finance/` has been broken by a bad `chmod`. Fix these i
    - Set `vm.dirty_ratio = 40`
    - Set `vm.swappiness = 10`
    - Set CPU governor to `performance`
-3. Activate with `tuned-adm profile lab-highio`
+3. Activate it
 4. Confirm with `tuned-adm active` and `sysctl vm.swappiness`
 5. Verify persistence after reboot
 
@@ -489,12 +487,12 @@ The application at `/opt/finance/` has been broken by a bad `chmod`. Fix these i
 
 > Objective: Identify CPU/memory intensive processes and kill processes; Adjust process scheduling
 
-1. Launch a CPU-heavy task: `openssl speed -multi 2 &` (or `stress-ng --cpu 2 &`)
-2. Launch a memory task: `tail /dev/zero &` (be careful — kill quickly)
-3. Identify the top CPU consumer with `ps -eo pid,pri,ni,pcpu,comm --sort=-pcpu | head`
-4. Change one process's nice value from default to `19` using `renice -n 19 -p <pid>`
-5. Use `systemd-run --scope -p CPUQuota=20% stress-ng --cpu 1 --timeout 30s` to launch a bounded process
-6. Kill all `stress-ng` and `openssl` processes with `pkill -f`
+1. Launch a CPU-heavy task (`openssl speed -multi 2 &`, or `stress-ng --cpu 2 &`)
+2. Launch a task that genuinely consumes RAM — writing into `/dev/shm` (tmpfs) works without extra packages. Watch it with `free -h`, and clean up afterward: the file stays resident in RAM even after the writer exits
+3. Identify the top CPU consumer using `ps` with a sort field
+4. Change one process's nice value from its default to `19`
+5. Launch a process bounded to 20% of a CPU using a transient systemd scope
+6. Kill all `stress-ng` and `openssl` processes by matching the full command line
 7. Send `SIGHUP` to `chronyd` and confirm via journal that it re-read its config
 
 ---
@@ -503,12 +501,11 @@ The application at `/opt/finance/` has been broken by a bad `chmod`. Fix these i
 
 > Objective: Locate and interpret system log files and journals; Preserve system journals
 
-1. Enable persistent journal storage (`Storage=persistent`), max disk size `500M`
-2. Configure `journald` to **forward to syslog** (`ForwardToSyslog=yes`)
-3. Configure `rsyslog` to write `authpriv.*` to `/var/log/secure.lab` and rotate weekly, keep 8 weeks (`/etc/logrotate.d/secure.lab`)
-4. Test:
-   - Attempt a failed `sudo` as `frank` → confirm entry appears in both `journalctl _COMM=sudo` and `/var/log/secure.lab`
-5. Use `journalctl --vacuum-time=7d` to prune older than 7 days
+1. Enable persistent journal storage, max disk size `500M`
+2. Configure `journald` to **forward to syslog**
+3. Configure `rsyslog` to write `authpriv.*` to `/var/log/secure.lab`, and rotate it weekly keeping 8 weeks via `/etc/logrotate.d/secure.lab`
+4. Test: attempt a failed `sudo` as `frank` → confirm the entry appears in both the journal (matched by command name) and `/var/log/secure.lab`
+5. Prune journal entries older than 7 days
 
 ---
 
@@ -535,6 +532,7 @@ The application at `/opt/finance/` has been broken by a bad `chmod`. Fix these i
 > Objective: Conditionally execute code; Process script inputs
 
 Write `/usr/local/bin/svcctl.sh` that:
+
 - Takes **two** arguments: `<action>` and `<service>`
 - Valid actions: `start`, `stop`, `restart`, `status`, `check`
 - `check` should print `RUNNING` or `STOPPED` based on `systemctl is-active`
@@ -551,16 +549,17 @@ Use a `case` statement, not chained `if/elif`.
 > Objective: Use looping constructs; Processing output of shell commands within a script
 
 Write `/usr/local/bin/csv_users.sh`:
+
 - Input file `/root/newusers.csv` with format `username,uid,gid,fullname`:
 
-      ivan,2200,6000,Ivan Petrov
-      julia,2201,6000,Julia Kim
-      kai,2202,6001,Kai Nguyen
-
+  ivan,2200,6000,Ivan Petrov
+  julia,2201,6000,Julia Kim
+  kai,2202,6001,Kai Nguyen
 - For each line:
+
   - Skip lines starting with `#` or blank lines
   - Create the user with the given UID, GID (assume group exists), and full name as comment
-  - Set a random 16-character password using `openssl rand -base64 12`
+  - Set a random password generated with `openssl`
   - Append `username,password` to `/root/passwords.txt` (mode `0600`)
 - Use `while IFS=, read -r ...` and `[[ ... ]]` tests
 
@@ -571,10 +570,11 @@ Write `/usr/local/bin/csv_users.sh`:
 > Objective: Process output of shell commands within a script
 
 Write `/root/health_report.sh`:
+
 - Collects: hostname, kernel, uptime, load, top 5 CPU processes, disk usage, failed systemd units
 - Writes to `/tmp/health.$$.tmp` first, then atomically moves to `/var/log/health/$(hostname)-$(date +%F).log`
 - Uses `trap` to clean up the tmp file on error/interrupt
-- Rotates: keep only 14 daily reports (`find ... -mtime +14 -delete`)
+- Rotates: keep only 14 daily reports
 - Schedule via **cron** at `06:00` every day **except the 1st of the month**
 
 ---
@@ -591,11 +591,10 @@ Write `/root/health_report.sh`:
 2. Install `httpd`, enable, start
 3. Create `/srv/websites/site1/`; add `index.html` = `"Site1 charlie"`
 4. Configure `httpd` to use `/srv/websites/site1/` as `DocumentRoot` (drop-in `/etc/httpd/conf.d/site1.conf`)
-5. On restart, `httpd` fails or serves 403 — diagnose via `journalctl -u httpd` and `ausearch -m avc -ts recent`
-6. Use `semanage fcontext -a -t httpd_sys_content_t '/srv/websites(/.*)?'`
-7. `restorecon -Rv /srv/websites`
-8. Verify with `curl http://localhost/` → returns `"Site1 charlie"`
-9. Confirm process context of `httpd` with `ps -eZ | grep httpd`
+5. On restart, `httpd` fails or serves 403 — diagnose it from the journal and the audit log
+6. Apply the correct persistent file context for `/srv/websites` and everything below it
+7. Verify with `curl http://localhost/` → returns `"Site1 charlie"`
+8. Confirm the process context of `httpd`
 
 ---
 
@@ -604,13 +603,12 @@ Write `/root/health_report.sh`:
 > Objective: Manage SELinux port labels; use Boolean settings
 
 1. Configure `sshd` to listen on **port 2222** in addition to 22
-2. Add `2222/tcp` to SELinux `ssh_port_t`:
-   `semanage port -a -t ssh_port_t -p tcp 2222`
+2. Add `2222/tcp` to the SELinux policy so sshd may bind it
 3. Add firewall rule for port `2222/tcp` in `labzone` (persistent)
-4. Restart `sshd`, confirm listening with `ss -tlnp | grep -E ':22|:2222'`
-5. Enable persistently the boolean `ssh_sysadm_login` (or `use_nfs_home_dirs` if not present) and verify with `getsebool`
+4. Restart `sshd`, confirm it is listening on both ports
+5. Enable persistently the boolean `ssh_sysadm_login` (or `use_nfs_home_dirs` if not present) and verify
 6. Set the boolean `container_manage_cgroup` on persistently
-7. Copy `/etc/motd` to `/var/www/html/motd.txt`; observe its context is `admin_home_t` or `etc_t`; use `restorecon` to fix — confirm it becomes `httpd_sys_content_t`
+7. Copy `/etc/motd` to `/var/www/html/motd.txt`; observe its context is `admin_home_t` or `etc_t`; fix it so it becomes `httpd_sys_content_t`
 
 ---
 
@@ -624,43 +622,18 @@ Write `/root/health_report.sh`:
 
 As user `emma` (rootless):
 
-1. Enable **linger** for `emma`: `loginctl enable-linger emma`
+1. Enable **linger** for `emma`
 2. Log in as `emma`, ensure `XDG_RUNTIME_DIR` is set
 3. Search and pull `registry.access.redhat.com/ubi10/nginx-124` (**nginx**, not httpd this time)
 4. Inspect the image; note the exposed port and the user it runs as
-5. Create a named **podman volume** `emma-nginx-data`
-6. Create content: `podman run --rm -v emma-nginx-data:/data ubi10/nginx-124 sh -c 'echo "Emma Nginx OK" > /data/index.html'`
-7. Create Quadlet **volume** and **container** files under `~/.config/containers/systemd/`:
-
-`~/.config/containers/systemd/emma-nginx.volume`:
-
-    [Volume]
-    VolumeName=emma-nginx-data
-
-`~/.config/containers/systemd/emma-nginx.container`:
-
-    [Unit]
-    Description=Emma Nginx Web
-    Wants=network-online.target
-    After=network-online.target
-
-    [Container]
-    Image=registry.access.redhat.com/ubi10/nginx-124
-    ContainerName=emma_nginx
-    PublishPort=9090:8080
-    Volume=emma-nginx-data:/opt/app-root/src:Z
-
-    [Service]
-    Restart=always
-    TimeoutStartSec=180
-
-    [Install]
-    WantedBy=default.target
-
-8. `systemctl --user daemon-reload && systemctl --user start emma-nginx.service`
-9. Test: `curl http://localhost:9090/` from `emma`
-10. **Bonus** — create a **Quadlet timer** that restarts the container every night at 03:00 (`emma-nginx-restart.timer` + service that runs `systemctl --user restart emma-nginx.service`)
-11. Reboot; verify container starts automatically without emma logging in
+5. Create a named **podman volume** `emma-nginx-data` and place an `index.html` in it containing `Emma Nginx OK`
+6. Create Quadlet **volume** and **container** files under `~/.config/containers/systemd/`:
+   - A `.volume` unit declaring the named volume
+   - A `.container` unit running the nginx image as `emma_nginx`, publishing host port `9090` to container port `8080`, mounting the volume at the nginx web root with the correct SELinux relabel flag, restarting always, and allowing a generous start timeout
+7. Reload the user daemon and start the service
+8. Test: `curl http://localhost:9090/` from `emma`
+9. **Bonus** — create a **Quadlet timer** that restarts the container every night at 03:00
+10. Reboot; verify container starts automatically without emma logging in
 
 ---
 
@@ -668,44 +641,419 @@ As user `emma` (rootless):
 
 | #  | Task                                              | Reboot Test | Done |
 | -- | ------------------------------------------------- | :---------: | :--: |
-| 1  | Recover root via `init=/bin/bash`                 | ✓          | [ ]  |
-| 2  | Change default target rescue → graphical          | ✓          | [ ]  |
-| 3  | Bootloader: kernel args + dracut rebuild          | ✓          | [ ]  |
-| 4  | Static IPv4/IPv6 + DNS + `lab-static` connection  | ✓          | [ ]  |
-| 5  | Firewalld custom zone + rich rule                 | ✓          | [ ]  |
-| 6  | Users/groups w/ custom home & shell               | ✓          | [ ]  |
-| 7  | Password aging + pwquality policy                 | ✓          | [ ]  |
-| 8  | Sudo user/cmd aliases + NOPASSWD                  | ✓          | [ ]  |
-| 9  | ACL project directory                             | ✓          | [ ]  |
-| 10 | Per-group umask + hard/soft links                 | ✓          | [ ]  |
-| 11 | SSH key auth + Match block for emma               | ✓          | [ ]  |
-| 12 | rsync w/ bwlimit + sftp batch + sha256            | —          | [ ]  |
-| 13 | Two repo files + GPG import + priorities          | ✓          | [ ]  |
-| 14 | Flatpak remote add + install/uninstall            | —          | [ ]  |
-| 15 | RPM verify/reinstall/downgrade                    | —          | [ ]  |
-| 16 | GPT partitions via `parted -s`                    | ✓          | [ ]  |
-| 17 | XFS by UUID + VFAT by LABEL, noexec/nodev/nosuid  | ✓          | [ ]  |
-| 18 | Swap **file** priority 20                         | ✓          | [ ]  |
-| 19 | Striped LV + 32 MiB PE                            | ✓          | [ ]  |
-| 20 | `pvmove`, `vgreduce`, extend to 100% FREE         | ✓          | [ ]  |
-| 21 | NFSv4-only server, disable v3                     | ✓          | [ ]  |
-| 22 | NFS client w/ `_netdev,nofail`                    | ✓          | [ ]  |
-| 23 | AutoFS wildcard indirect + ghost + 60s timeout    | ✓          | [ ]  |
-| 24 | Permission repair + suid inventory                | ✓          | [ ]  |
-| 25 | Chrony server on delta, client on charlie           | ✓          | [ ]  |
-| 26 | Tuned custom profile inheriting parent            | ✓          | [ ]  |
-| 27 | Nice + cgroup CPUQuota + pkill                    | —          | [ ]  |
-| 28 | Persistent journal + rsyslog + logrotate          | ✓          | [ ]  |
-| 29 | at + cron + systemd timer OnCalendar 3h           | ✓          | [ ]  |
-| 30 | `case`-based service control script               | —          | [ ]  |
-| 31 | CSV `while read` user creation                    | —          | [ ]  |
-| 32 | Health report + trap + rotation cron              | ✓          | [ ]  |
-| 33 | SELinux fcontext for custom DocumentRoot          | ✓          | [ ]  |
-| 34 | SELinux port label 2222 + booleans                | ✓          | [ ]  |
-| 35 | Rootless nginx Quadlet + timer + linger           | ✓          | [ ]  |
+| 1  | Recover root via`init=/bin/bash`                |     ✓     | [ ] |
+| 2  | Change default target rescue → graphical         |     ✓     | [ ] |
+| 3  | Bootloader: kernel args + dracut rebuild          |     ✓     | [ ] |
+| 4  | Static IPv4/IPv6 + DNS +`lab-static` connection |     ✓     | [ ] |
+| 5  | Firewalld custom zone + rich rule                 |     ✓     | [ ] |
+| 6  | Users/groups w/ custom home & shell               |     ✓     | [ ] |
+| 7  | Password aging + pwquality policy                 |     ✓     | [ ] |
+| 8  | Sudo user/cmd aliases + NOPASSWD                  |     ✓     | [ ] |
+| 9  | ACL project directory                             |     ✓     | [ ] |
+| 10 | Per-group umask + hard/soft links                 |     ✓     | [ ] |
+| 11 | SSH key auth + Match block for emma               |     ✓     | [ ] |
+| 12 | rsync w/ bwlimit + sftp batch + sha256            |     —     | [ ] |
+| 13 | Two repo files + GPG import + priorities          |     ✓     | [ ] |
+| 14 | Flatpak remote add + install/uninstall            |     —     | [ ] |
+| 15 | RPM verify/tamper/reinstall                       |     —     | [ ] |
+| 16 | GPT partitions via`parted -s`                   |     ✓     | [ ] |
+| 17 | XFS by UUID + VFAT by LABEL, noexec/nodev/nosuid  |     ✓     | [ ] |
+| 18 | Swap**file** priority 20                    |     ✓     | [ ] |
+| 19 | Striped LV + 32 MiB PE                            |     ✓     | [ ] |
+| 20 | `pvmove`, `vgreduce`, extend to 100% FREE     |     ✓     | [ ] |
+| 21 | NFSv4-only server, disable v3                     |     ✓     | [ ] |
+| 22 | NFS client w/`_netdev,nofail`                   |     ✓     | [ ] |
+| 23 | AutoFS wildcard indirect + ghost + 60s timeout    |     ✓     | [ ] |
+| 24 | Permission repair + suid inventory                |     ✓     | [ ] |
+| 25 | Chrony server on delta, client on charlie         |     ✓     | [ ] |
+| 26 | Tuned custom profile inheriting parent            |     ✓     | [ ] |
+| 27 | Nice + cgroup CPUQuota + pkill                    |     —     | [ ] |
+| 28 | Persistent journal + rsyslog + logrotate          |     ✓     | [ ] |
+| 29 | at + cron + systemd timer OnCalendar 3h           |     ✓     | [ ] |
+| 30 | `case`-based service control script             |     —     | [ ] |
+| 31 | CSV`while read` user creation                   |     —     | [ ] |
+| 32 | Health report + trap + rotation cron              |     ✓     | [ ] |
+| 33 | SELinux fcontext for custom DocumentRoot          |     ✓     | [ ] |
+| 34 | SELinux port label 2222 + booleans                |     ✓     | [ ] |
+| 35 | Rootless nginx Quadlet + timer + linger           |     ✓     | [ ] |
 
-**Score: ___ / 35**  
+**Score: ___ / 35**
 **Passing threshold (~70%): 25 / 35**
+
+---
+
+## ✅ Quick Verification Script
+
+Run on the relevant host **after a reboot**. Checks the objectively-verifiable, persistence-sensitive items only — a safety net against marking something "done" that didn't actually persist, not a full grader. Tasks needing human judgement (T11 SSH keys, T12 transfers, T30–32 script behaviour) aren't covered.
+
+```bash
+#!/usr/bin/env bash
+# ex2-verify.sh — spot-check Exam 2 persistence. Run with sudo on each host.
+pass=0; fail=0
+chk() { # chk "label" "command"
+  if eval "$2" &>/dev/null; then printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass+1))
+  else printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); fi
+}
+
+echo "== Host: $(hostname -s) =="
+
+case "$(hostname -s)" in
+  *charlie*)
+    chk "T3  audit=1 in cmdline"        "grep -q 'audit=1' /proc/cmdline"
+    chk "T3  net.ifnames=0 in cmdline"  "grep -q 'net.ifnames=0' /proc/cmdline"
+    chk "T3  quiet removed"             "! grep -q ' quiet' /proc/cmdline"
+    chk "T4  hostname charlie"          "hostnamectl --static | grep -qx charlie.ex200.lab"
+    chk "T4  IPv4 10.20.30.11"          "ip -4 addr show | grep -q '10.20.30.11'"
+    chk "T4  IPv6 fd42::11"             "ip -6 addr show | grep -q 'fd42::11'"
+    chk "T4  lab-static autoconnect"    "nmcli -g connection.autoconnect con show lab-static | grep -qi yes"
+    chk "T5  labzone is default"        "firewall-cmd --get-default-zone | grep -qx labzone"
+    chk "T5  labzone ports 9000-9010"   "firewall-cmd --zone=labzone --list-ports | grep -q 9000-9010"
+    chk "T5  labzone has ssh"           "firewall-cmd --zone=labzone --list-services | grep -q ssh"
+    chk "T6  emma uid 2100"             "id -u emma | grep -qx 2100"
+    chk "T6  ops gid 6000"              "getent group ops | grep -q ':6000:'"
+    chk "T6  emma home /srv/users/emma" "getent passwd emma | grep -q /srv/users/emma"
+    chk "T6  henry nologin"             "getent passwd henry | grep -qE '(nologin|false)$'"
+    chk "T7  pwquality minlen 12"       "grep -qE '^\\s*minlen\\s*=\\s*12' /etc/security/pwquality.conf"
+    chk "T7  emma max 45 days"          "chage -l emma | grep -qi 'Maximum.*45'"
+    chk "T8  sudoers valid"             "visudo -c &>/dev/null"
+    chk "T8  lab_sudo has OPSTEAM"      "grep -q OPSTEAM /etc/sudoers.d/lab_sudo"
+    chk "T9  phoenix 2770"              "stat -c '%a' /srv/project/phoenix | grep -qx 2770"
+    chk "T9  frank access ACL"          "getfacl /srv/project/phoenix 2>/dev/null | grep -q '^user:frank:rwx'"
+    chk "T9  default ACL present"       "getfacl /srv/project/phoenix 2>/dev/null | grep -q '^default:'"
+    chk "T10 ops umask drop-in"         "grep -rq '0027' /etc/profile.d/"
+    chk "T13 two repo files"            "test -f /etc/yum.repos.d/lab-baseos.repo -a -f /etc/yum.repos.d/lab-appstream.repo"
+    chk "T13 gpgcheck enabled"          "grep -q 'gpgcheck=1' /etc/yum.repos.d/lab-baseos.repo"
+    chk "T17 charliexfs mounted"        "findmnt /mnt/charliexfs"
+    chk "T17 usbdata noexec"            "findmnt -no OPTIONS /mnt/usbdata | grep -q noexec"
+    chk "T17 usbdata by LABEL"          "grep '/mnt/usbdata' /etc/fstab | grep -q 'LABEL=USBDATA'"
+    chk "T19 vg_lab2 32M PE"            "vgs --noheadings -o vg_extent_size vg_lab2 | grep -q '32'"
+    chk "T19 stripe mounted"            "findmnt /mnt/stripe"
+    chk "T19 home2 mounted"             "findmnt /mnt/home2"
+    chk "T20 vdd removed from VG"       "! pvs --noheadings -o pv_name | grep -q /dev/vdd"
+    chk "T22 projects mounted"          "findmnt /mnt/projects"
+    chk "T22 archive read-only"         "findmnt -no OPTIONS /mnt/archive | grep -q '\\bro\\b'"
+    chk "T23 autofs enabled"            "systemctl is-enabled --quiet autofs"
+    chk "T24 finance 2750 gina:ops"     "stat -c '%a %U:%G' /opt/finance | grep -qx '2750 gina:ops'"
+    chk "T24 private 0700"              "stat -c '%a' /opt/finance/private | grep -qx 700"
+    chk "T24 suid list saved"           "test -s /root/suid_list.txt"
+    chk "T25 chrony uses delta"         "grep -qE '^server +delta' /etc/chrony.conf"
+    chk "T25 timezone London"           "timedatectl show -p Timezone --value | grep -qx Europe/London"
+    chk "T26 lab-highio active"         "tuned-adm active | grep -q lab-highio"
+    chk "T26 swappiness 10"             "sysctl -n vm.swappiness | grep -qx 10"
+    chk "T28 journal persistent"        "test -d /var/log/journal"
+    chk "T28 ForwardToSyslog"           "grep -qE '^ForwardToSyslog=yes' /etc/systemd/journald.conf"
+    chk "T28 secure.lab rule"           "grep -q 'secure.lab' /etc/rsyslog.conf /etc/rsyslog.d/* 2>/dev/null"
+    chk "T28 logrotate config"          "test -f /etc/logrotate.d/secure.lab"
+    chk "T29 labhealth timer enabled"   "systemctl is-enabled --quiet labhealth.timer"
+    chk "T29 emma weekday cron"         "crontab -l -u emma 2>/dev/null | grep -q '1-5'"
+    chk "T32 health_report cron"        "crontab -l 2>/dev/null | grep -q 'health_report.sh'"
+    chk "T33 SELinux enforcing"         "getenforce | grep -qx Enforcing"
+    chk "T33 websites labeled"          "ls -Zd /srv/websites | grep -q httpd_sys_content_t"
+    chk "T33 site1 serving"             "curl -sf http://localhost/ | grep -q 'Site1 charlie'"
+    chk "T34 port 2222 labeled"         "semanage port -l | grep ssh_port_t | grep -q 2222"
+    chk "T34 sshd on 2222"              "ss -tlnp | grep -q ':2222'"
+    chk "T34 labzone has 2222"          "firewall-cmd --zone=labzone --list-ports | grep -q 2222"
+    chk "T34 container_manage_cgroup"   "getsebool container_manage_cgroup | grep -q ' on$'"
+    ;;
+  *delta*)
+    chk "T2  default graphical"         "systemctl get-default | grep -qx graphical.target"
+    chk "T4  hostname delta"            "hostnamectl --static | grep -qx delta.ex200.lab"
+    chk "T4  IPv4 10.20.30.12"          "ip -4 addr show | grep -q '10.20.30.12'"
+    chk "T4  IPv6 fd42::12"             "ip -6 addr show | grep -q 'fd42::12'"
+    chk "T10 hard link demo"            "test -f /root/link_notes.txt"
+    chk "T11 PermitRootLogin prohibit"  "sshd -T 2>/dev/null | grep -qi 'permitrootlogin prohibit-password'"
+    chk "T11 AllowUsers set"            "grep -qE '^AllowUsers' /etc/ssh/sshd_config"
+    chk "T11 sshd config valid"         "sshd -t"
+    chk "T18 swap file active"          "swapon --show | grep -q /swap/extraswap.img"
+    chk "T18 swap priority 20"          "swapon --show=PRIO --noheadings | grep -q 20"
+    chk "T18 swapfile mode 0600"        "stat -c '%a' /swap/extraswap.img | grep -qx 600"
+    chk "T21 nfs-server running"        "systemctl is-active --quiet nfs-server"
+    chk "T21 nfsv3 disabled"            "grep -qE '^\\s*vers3\\s*=\\s*n' /etc/nfs.conf"
+    chk "T21 projects exported"         "exportfs -v | grep -q /srv/nfs/projects"
+    chk "T25 chrony allows subnet"      "grep -qE '^allow +10\\.20\\.30\\.0/24' /etc/chrony.conf"
+    chk "T25 timezone Tokyo"            "timedatectl show -p Timezone --value | grep -qx Asia/Tokyo"
+    ;;
+esac
+
+echo "== $pass passed, $fail failed =="
+```
+
+---
+
+---
+
+# 🔑 ANSWER KEY
+
+> **Stop.** Do not read this during a timed run. Score yourself from the checklist first, then come back here for the tasks you missed.
+
+---
+
+### Section 1 — Boot & Recovery
+
+**T1 — Break-in via init=/bin/bash**
+
+```bash
+# At GRUB: 'e', on the linux line change ro -> rw, append init=/bin/bash, Ctrl-X
+mount -o remount,rw /       # if needed
+passwd root                 # Ex200Pass!
+touch /.autorelabel
+exec /sbin/init             # or: sync; reboot -f
+```
+
+Different from `rd.break` — you skip systemd entirely, so the root filesystem is already mounted by the kernel.
+
+**T2 — Rescue → graphical**
+
+```bash
+systemctl set-default graphical.target
+dnf group install "Server with GUI"
+systemctl get-default
+runlevel        # shows 5
+```
+
+**T3 — Bootloader**
+
+```bash
+vim /etc/default/grub    # remove rhgb quiet; add audit=1 net.ifnames=0; GRUB_TIMEOUT=5
+grub2-mkconfig -o /boot/grub2/grub.cfg
+dracut -f
+reboot
+cat /proc/cmdline
+```
+
+> `net.ifnames=0` reverts to legacy `ethX` naming — do this **before** Task 4/5, since the interface name changes.
+
+---
+
+### Section 5 — Software Management
+
+**T13 — Two repo files + GPG**
+
+```bash
+dnf --disablerepo="*" --enablerepo="lab-baseos" list available | head
+```
+
+**T14 — Flatpak remote**
+
+```bash
+flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+```
+
+**T15 — RPM verify / reinstall**
+
+```bash
+rpm -V nano                 # clean = no output
+# after editing /etc/nanorc:
+rpm -V nano                 # S.5....T.  c /etc/nanorc
+dnf reinstall nano
+rpm -qf /etc/hosts
+rpm -ql chrony
+rpm -qa --last | head
+```
+
+---
+
+### Section 6 — Storage
+
+**T16 — parted scripted**
+
+```bash
+parted -s /dev/vdb mklabel gpt
+parted -s /dev/vdb mkpart primary xfs 1MiB 2049MiB
+parted -s /dev/vdb mkpart primary linux-swap 2049MiB 3073MiB
+parted -s /dev/vdb mkpart primary 3073MiB 100%
+parted -s /dev/vdb set 3 lvm on
+```
+
+**T20 — pvmove, vgreduce, extend**
+
+`lv_stripe` is striped 2-way across `vdb3` and `vdd`, so a plain `pvmove` has nowhere to put its extents once `vdd` is gone — LVM needs as many target PVs as stripes unless you force it. `--alloc anywhere` collapses it onto the single remaining PV, and `lv_stripe`'s segment type becomes linear.
+
+```bash
+pvmove --alloc anywhere /dev/vdd
+vgreduce vg_lab2 /dev/vdd
+pvremove /dev/vdd
+lvextend -l +100%FREE -r /dev/vg_lab2/lv_home2
+```
+
+---
+
+### Section 7 — NFS & AutoFS
+
+**T21 — NFSv4-only exports**
+
+`/etc/nfs.conf`: under `[nfsd]` set `vers3=n`, `vers4=y`, `vers4.2=y`.
+
+```text
+/srv/nfs/projects  10.20.30.0/24(rw,sync,sec=sys,no_subtree_check)
+/srv/nfs/archive   charlie.ex200.lab(ro,sync,sec=sys,root_squash)
+```
+
+**T22 — NFS client fstab**
+
+```text
+delta:/srv/nfs/projects  /mnt/projects  nfs4  _netdev,nofail,rw  0 0
+delta:/srv/nfs/archive   /mnt/archive   nfs4  _netdev,nofail,ro  0 0
+```
+
+**T23 — AutoFS wildcard indirect map**
+
+`/etc/auto.master.d/labhome.autofs`:
+
+```text
+/net/homes  /etc/auto.labhome  --timeout=60 --ghost
+```
+
+`/etc/auto.labhome`:
+
+```text
+*  -fstype=nfs4,rw,soft  delta.ex200.lab:/srv/nfs/homes/&
+```
+
+**T24 — SUID inventory**
+
+```bash
+find /usr/bin -perm -4000 -type f > /root/suid_list.txt
+```
+
+> Heads up: the Linux kernel ignores the setuid bit on shebang scripts, so step 3's `4754` on `run_report.sh` sets the bit correctly but will not actually elevate privilege at exec time.
+
+---
+
+### Section 8 — Services, Logging & Time
+
+**T25 — Chrony server**
+
+On delta, add `allow 10.20.30.0/24` to `/etc/chrony.conf`. On charlie, comment out the pool/server defaults and add `server delta.ex200.lab iburst`.
+
+**T27 — Process management**
+
+```bash
+openssl speed -multi 2 &
+dd if=/dev/zero of=/dev/shm/memtest bs=1M count=800 &
+# or: stress-ng --vm 1 --vm-bytes 800M --timeout 60s &
+free -h
+rm -f /dev/shm/memtest      # tmpfs file stays resident after dd exits
+
+ps -eo pid,pri,ni,pcpu,comm --sort=-pcpu | head
+renice -n 19 -p <pid>
+systemd-run --scope -p CPUQuota=20% stress-ng --cpu 1 --timeout 30s
+pkill -f stress-ng
+pkill -f openssl
+sudo kill -HUP $(pgrep chronyd)
+journalctl -u chronyd -n 20
+```
+
+**T28 — Journal forwarding + logrotate**
+
+`/etc/systemd/journald.conf`: `Storage=persistent`, `SystemMaxUse=500M`, `ForwardToSyslog=yes`.
+
+rsyslog rule: `authpriv.*    /var/log/secure.lab`
+
+`/etc/logrotate.d/secure.lab`:
+
+```text
+/var/log/secure.lab {
+    weekly
+    rotate 8
+    missingok
+    notifempty
+    compress
+    delaycompress
+}
+```
+
+```bash
+journalctl _COMM=sudo
+journalctl --vacuum-time=7d
+```
+
+**T29 — Timer every 3 hours**
+
+`OnCalendar=*-*-* 00/3:00:00` with `Persistent=true`. Weekday cron for emma: `15 7 * * 1-5 df -h > ~/disk_report.log`.
+
+---
+
+### Section 9 — Scripting
+
+**T31 — Random password**
+
+`openssl rand -base64 12` yields a 16-character base64 string.
+
+**T32 — Cron "every day except the 1st"**
+
+Cron has no "except" operator — use a day-of-month range: `0 6 2-31 * * /root/health_report.sh`
+
+---
+
+### Section 10 — SELinux
+
+**T33 — Custom web root**
+
+```bash
+journalctl -u httpd
+ausearch -m avc -ts recent
+semanage fcontext -a -t httpd_sys_content_t '/srv/websites(/.*)?'
+restorecon -Rv /srv/websites
+curl http://localhost/
+ps -eZ | grep httpd
+```
+
+**T34 — Non-standard SSH port**
+
+```bash
+semanage port -a -t ssh_port_t -p tcp 2222
+firewall-cmd --permanent --zone=labzone --add-port=2222/tcp
+firewall-cmd --reload
+ss -tlnp | grep -E ':22|:2222'
+getsebool ssh_sysadm_login
+setsebool -P container_manage_cgroup on
+restorecon -v /var/www/html/motd.txt
+```
+
+---
+
+### Section 11 — Containers
+
+**T35 — Quadlet volume + container**
+
+`~/.config/containers/systemd/emma-nginx.volume`:
+
+```ini
+[Volume]
+VolumeName=emma-nginx-data
+```
+
+`~/.config/containers/systemd/emma-nginx.container`:
+
+```ini
+[Unit]
+Description=Emma Nginx Web
+Wants=network-online.target
+After=network-online.target
+
+[Container]
+Image=registry.access.redhat.com/ubi10/nginx-124
+ContainerName=emma_nginx
+PublishPort=9090:8080
+Volume=emma-nginx-data:/opt/app-root/src:Z
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target
+```
+
+```bash
+loginctl enable-linger emma
+podman run --rm -v emma-nginx-data:/data ubi10/nginx-124 \
+  sh -c 'echo "Emma Nginx OK" > /data/index.html'
+systemctl --user daemon-reload
+systemctl --user start emma-nginx.service
+curl http://localhost:9090/
+```
 
 ---
 
@@ -730,7 +1078,7 @@ As user `emma` (rootless):
 ### LVM advanced
 
     lvcreate --type striped -i 2 -L 1G -n lv_stripe vg_lab2
-    pvmove /dev/vdd
+    pvmove --alloc anywhere /dev/vdd
     vgreduce vg_lab2 /dev/vdd
     lvextend -l +100%FREE -r /dev/vg_lab2/lv_home2
 
@@ -764,30 +1112,31 @@ As user `emma` (rootless):
 
 ## 📚 Delta from Exam #1 — What This Exam Emphasizes
 
-| Area                | Exam #1 approach          | Exam #2 approach                                   |
-| ------------------- | ------------------------- | -------------------------------------------------- |
-| Root recovery       | `rd.break`                | `init=/bin/bash`                                   |
-| Boot target         | graphical → multi-user    | rescue → graphical                                 |
-| Partitions          | `fdisk` interactive       | `parted -s` scripted                               |
-| Filesystems         | XFS + ext4                | XFS + **VFAT** + noexec/nodev/nosuid               |
-| Swap                | Partition                 | **Swap file**                                      |
-| LVM                 | Linear LVs                | **Striped LV**, `pvmove`, `vgreduce`               |
-| Firewall            | Services in `public`      | **Custom zone** + rich rule + default zone         |
-| Sudo                | Group NOPASSWD            | **User_Alias + Cmnd_Alias** + PAM pwquality        |
-| Permissions         | ugo/rwx + setgid          | **ACLs** (default + access)                        |
-| SSH                 | Simple key auth           | **`Match User`** + no-pw for specific user         |
-| Repos               | One file, gpgcheck=0      | **Two files**, GPG import, priorities              |
-| Flatpak             | Not covered               | **Flathub remote + install**                       |
-| RPM                 | Install/verify            | **`rpm -V` after tampering + reinstall**           |
-| NFS                 | v3/v4                     | **v4 only** + disable v3                           |
-| AutoFS              | Direct + indirect         | **Wildcard indirect** + timeout + ghost            |
-| Tuned               | Custom merged             | **Custom profile inheriting**                      |
-| Cron/Timer          | Hourly timer              | **3-hour timer + Persistent=true**                 |
-| Scripting           | `if/elif`                 | **`case` + `while read` CSV parsing + `trap`**     |
-| SELinux             | httpd default root        | httpd **custom root** + **port 2222**              |
-| Containers          | httpd Quadlet             | **nginx** rootless + **volume Quadlet** + timer    |
+| Area          | Exam#1 approach         | Exam#2 approach                                             |
+| ------------- | ----------------------- | ----------------------------------------------------------- |
+| Root recovery | `rd.break`            | `init=/bin/bash`                                          |
+| Boot target   | graphical → multi-user | rescue → graphical                                         |
+| Partitions    | `fdisk` interactive   | `parted -s` scripted                                      |
+| Filesystems   | XFS + ext4              | XFS +**VFAT** + noexec/nodev/nosuid                   |
+| Swap          | Partition               | **Swap file**                                         |
+| LVM           | Linear LVs              | **Striped LV**, `pvmove`, `vgreduce`              |
+| Firewall      | Services in`public`   | **Custom zone** + rich rule + default zone            |
+| Sudo          | Group NOPASSWD          | **User_Alias + Cmnd_Alias** + PAM pwquality           |
+| Permissions   | ugo/rwx + setgid        | **ACLs** (default + access)                           |
+| SSH           | Simple key auth         | **`Match User`** + no-pw for specific user          |
+| Repos         | One file, gpgcheck=0    | **Two files**, GPG import, priorities                 |
+| Flatpak       | Not covered             | **Flathub remote + install**                          |
+| RPM           | Install/verify          | **`rpm -V` after tampering + reinstall**            |
+| NFS           | v3/v4                   | **v4 only** + disable v3                              |
+| AutoFS        | Direct + indirect       | **Wildcard indirect** + timeout + ghost               |
+| Tuned         | Custom merged           | **Custom profile inheriting**                         |
+| Cron/Timer    | Hourly timer            | **3-hour timer + Persistent=true**                    |
+| Scripting     | `if/elif`             | **`case` + `while read` CSV parsing + `trap`**  |
+| SELinux       | httpd default root      | httpd**custom root** + **port 2222**            |
+| Containers    | httpd Quadlet           | **nginx** rootless + **volume Quadlet** + timer |
 
 ---
 
-*Practice exam #2 created 2026-07-08 based on RHEL 10 EX200 objectives.*  
+*Practice exam #2 created 2026-07-08 based on RHEL 10 EX200 objectives.*
 *Companion to Exam #1 (2026-05-12); designed to cover the same objectives with fresh scenarios and value swaps.*
+*Restructured 2026-09-09: inline solutions, the command quick-reference, and the Delta table moved below the answer key divider so the exam can be re-run cold.*
