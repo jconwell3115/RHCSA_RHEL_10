@@ -2,14 +2,20 @@
 title: RHCSA Practice Exam - RHEL 10
 tags: [certifications, rhcsa, rhel10, practice, linux]
 created: 2026-05-12
+restructured: 2026-09-09 - answer key moved to bottom for cold re-runs
+note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading Checklist during a timed run.
 ---
 # 🧪 RHCSA Practice Exam — RHEL 10 (EX200)
 
-> **Format:** Performance-based | **Time Limit:** 2.5 hours | **Pass Score:** ~70%
+> **Format:** Performance-based | **Time budget:** 3 hours | **Pass Score:** ~70% (25 / 35)
 >
 > All configurations **must persist after reboot** without intervention.
 >
 > You may use `man`, `info`, and `/usr/share/doc` — no internet access on exam day.
+
+> **⏱️ Budget is 3 hours, not 2.5.** 35 tasks at 2.5 hrs works out to ~4.3 min/task, which is not achievable. Don't read a timer overrun as "not ready" — the real EX200 presents far fewer, larger tasks, so per-task pacing here doesn't transfer. Confirm the real exam's current duration on Red Hat's objectives page.
+
+> **📌 Answer key is at the end of this file, not under each task.** This exam originally carried its solutions inline; they were moved on 2026-09-09 so it can be re-run cold. Working it with the answers visible trains recognition — the real exam tests recall.
 
 ---
 
@@ -38,7 +44,7 @@ created: 2026-05-12
 The real exam has repos pre-configured or gives you a URL. For lab purposes, either:
 
 - Subscribe with a Red Hat Developer account: `subscription-manager register`
-- Or mount the RHEL 10 ISO and configure a local repo (covered in Task 9)
+- Or mount the RHEL 10 ISO and configure a local repo (covered in Task 13)
 
 ---
 
@@ -50,6 +56,7 @@ Read carefully before beginning:
 2. All configurations must survive a `reboot` — test this for critical tasks
 3. Partial credit is not given on the real exam — complete each task fully
 4. Work methodically; a wrong fstab entry can break boot
+5. **Do not scroll to the answer key.** If you're stuck, use `man` — that's the skill being tested
 
 ---
 
@@ -67,10 +74,6 @@ Read carefully before beginning:
 
 The root password on `rhel10-bravo` is unknown. Break into the system using the `init=/bin/bash` method, reset the root password to `RedHat10!`, and ensure SELinux labels are updated before the next boot. Reboot and confirm login.
 
-> rd.break is no longer a valid breakin method, it drops to an emergency mode not shell.  init=/bin/bash is the only method
-
-**Hint:** `init=/bin/bash`, `mount -o remount,rw /`, `passwd root`, `touch /.autorelabel`, `exec /sbin/reboot -f`
-
 ---
 
 **Task 2 — Configure Boot Target** *(bravo)*
@@ -78,11 +81,6 @@ The root password on `rhel10-bravo` is unknown. Break into the system using the 
 > Objective: Boot systems into different targets manually
 
 After breaking into bravo, confirm it is currently booting to `graphical.target`. Change the default boot target to `multi-user.target`. Reboot and verify the system boots without a GUI.
-
-```
-systemctl get-default
-systemctl set-default multi-user.target
-```
 
 ---
 
@@ -97,13 +95,6 @@ Edit the GRUB configuration on `rhel10-alpha` with the following changes:
 - Append `quiet` to the end of `GRUB_CMDLINE_LINUX`
 
 Regenerate the GRUB config and reboot to verify.
-
-```
-vim /etc/default/grub
-grub2-mkconfig -o /boot/grub2/grub.cfg   # BIOS
-# OR
-grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg  # UEFI
-```
 
 ---
 
@@ -122,17 +113,7 @@ Configure the following on each server using `nmcli`. Configurations must surviv
 | alpha | `alpha.lab.local` | `192.168.100.10/24` | `fd00::10/64` | `192.168.100.1` |
 | bravo | `bravo.lab.local` | `192.168.100.20/24` | `fd00::20/64` | `192.168.100.1` |
 
-Add entries for both hosts to `/etc/hosts` on both systems. Confirm connectivity between nodes by hostname.
-
-```bash
-nmcli con show # get interface name
-sudo nmcli con add type thernet ifname "interface-name" con-name "connection-name"
-nmcli con mod "connection-name" ipv4.addresses 192.168.100.10/24 ipv4.gateway 192.168.100.1 ipv4.method manual
-nmcli con mod "connection-name" ipv4.dns "8.8.8.8 1.1.1.1"
-nmcli con mod "connection-name" ipv6.addresses fd00::10/64 ipv6.method manual
-nmcli con up "connection-name"
-hostnamectl set-hostname alpha.lab.local
-```
+Also set DNS to `8.8.8.8` and `1.1.1.1`. Add entries for both hosts to `/etc/hosts` on both systems. Confirm connectivity between nodes by hostname.
 
 ---
 
@@ -147,16 +128,6 @@ On `alpha`:
 - Add a runtime-only rule allowing port `8080/tcp`
 - Permanently allow TCP ports `5900-5910` in the `internal` zone
 - Reload the firewall and confirm rules persist
-
-```bash
-firewall-cmd --permanent --add-service=ssh
-firewall-cmd --permanent --add-service=http
-firewall-cmd --add-port=8080/tcp
-firewall-cmd --permanent --zone=internal --add-port=5900-5910/tcp
-firewall-cmd --reload
-firewall-cmd --list-all
-firewall-cmd --zone=internal --list-all
-```
 
 ---
 
@@ -191,14 +162,10 @@ Verify each user's entry in `/etc/passwd` and group memberships with `id`.
 
 > Objective: Change passwords and adjust password aging for local user accounts
 
-- Set the password for all users created in Task 6 to `Lab@12345`
-  - `for user in alice bob carol dave; do echo "${user}:Lab@12345"; done | sudo chpasswd`
+- Set the password for all users created in Task 6 to `Lab@12345` — do it non-interactively, in one command
 - Using `chage`, configure `alice` with: minimum 7 days, maximum 60 days, warn 10 days
-  - `sudo chage alice -m 7 -M 60 -W 10`
 - Using `passwd`, configure `bob` with: minimum 5 days, maximum 90 days, warn 14 days, inactive 10 days
-  - `sudo passwd bob -n 5 -x 90 -w 14 -i 10`
 - Force `carol` to change her password on next login
-  - `sudo chage carol -d 0`qq
 - Set system-wide minimum password length to 8 characters in `/etc/login.defs`
 
 ---
@@ -230,12 +197,6 @@ Create a shared directory `/data/devshare`:
 - Set the **sticky bit** so users can only delete their own files
 - Create a test file as `bob` and verify group ownership is `developers`
 
-```bash
-mkdir -p /data/devshare
-chown alice:developers /data/devshare
-chmod 3770 /data/devshare
-```
-
 ---
 
 **Task 10 — Standard File Permissions & Umask** *(both nodes)*
@@ -245,11 +206,6 @@ chmod 3770 /data/devshare
 - On `alpha`, configure the system-wide umask so all newly created files default to `660` and directories default to `770`. Make this persistent for all users.
 - On `bravo`, apply the same setting.
 - Verify by creating a test file and directory as a regular user.
-
-```bash
-# In /etc/profile.d/umask.sh
-umask 0007
-```
 
 ---
 
@@ -291,7 +247,7 @@ Ensure `PermitRootLogin yes` & `PasswordAuthentication yes` is set in `/etc/ssh/
 
 ---
 
-> If the VM was registered with Red hat disable the builtin repos before continuing
+> **Environment prep (not a graded task):** If the VM was registered with Red Hat, disable the builtin repos before continuing.
 
 ```bash
 sudo subscription-manager repos --disable=rhel-10-for-x86_64-baseos-rpms
@@ -314,6 +270,596 @@ Configure a local YUM/DNF repository from the RHEL 10 installation ISO:
    - `[AppStream]` section pointing to `file:///mnt/rhel10iso/AppStream`
    - Both enabled, `gpgcheck=0`
 3. Verify with `dnf repolist`
+4. Make the mount persist across reboot — and test that persistence **without** rebooting
+
+---
+
+**Task 14 — Package Management Operations** *(alpha)*
+
+> Objective: Install and remove RPM software packages
+
+- Install the `vim-enhanced`, `tmux`, and `wget` packages
+- Verify `httpd` package is not installed; install it
+- Query the installed `httpd` package and list all its configuration files
+- Download (but don't install) the `nmap` package RPM to `/root/downloads/`
+- Use `rpm` to verify the integrity of a package file
+- Install `nmap` from the downloaded RPM
+- Remove `nmap` with `rpm`
+
+---
+
+**Task 15 — Package Groups & Flatpak *(alpha)***
+
+> Objective: Install and update software packages from Red Hat CDN, remote repository, or local file system (RHEL 10 objectives — RPM + Flatpak; modularity is deprecated)
+
+Part A — Package groups:
+
+- List available package groups
+- Install the "Development Tools" group
+- Remove it
+
+Part B — Flatpak (now a mandatory RHCSA objective):
+
+- Add the Flathub remote
+- Search for, install, run, update, and remove an application
+- Clean up unused runtimes
+
+Part C — Installing an alternate app-stream version (the modern replacement for module streams):
+
+- Discover what versioned `postgresql` packages are available, install `postgresql-server`, and confirm the installed version
+- Determine whether `postgresql` is delivered as a module on RHEL 10, and record what you find
+
+---
+
+### SECTION 6: Storage — Partitions, LVM & Swap
+
+> **Note:** These tasks use the extra disk `/dev/vdb` on bravo (or alpha if you added one)
+
+---
+
+**Task 16 — Create GPT Partitions** *(bravo, /dev/vdb)*
+
+> Objective: List, create, delete partitions on GPT disks
+
+Using `/dev/vdb` on bravo:
+
+1. Create a GPT partition table
+2. Create a 1 GiB partition (`vdb1`) — type: Linux filesystem
+3. Create a 500 MiB partition (`vdb2`) — type: Linux swap
+4. Create a 2 GiB partition (`vdb3`) — type: Linux filesystem
+5. Run `partprobe` to inform the kernel
+6. Verify with `lsblk` and `fdisk -l /dev/vdb`
+
+---
+
+**Task 17 — Create and Mount File Systems by UUID** *(bravo)*
+
+> Objective: Configure systems to mount file systems at boot by UUID or label, Create/mount/unmount VFAT, ext4, XFS
+
+1. Format `vdb1` as **XFS**
+2. Format `vdb3` as **ext4** with label `DATASTORE`
+3. Create mount points `/mnt/xfs_data` and `/mnt/ext4_data`
+4. Add persistent entries to `/etc/fstab` using **UUID** for xfs_data and **LABEL** for ext4_data
+5. Run `mount -a` and verify with `df -hT`
+6. Create a test file in each mount point and reboot to confirm persistence
+
+---
+
+**Task 18 — Configure Swap Space** *(bravo)*
+
+> Objective: Add new partitions, logical volumes, and swap to a system non-destructively
+
+1. Format `vdb2` as swap with label `EXTRASWAP`
+2. Add a persistent swap entry to `/etc/fstab` with priority `10`
+3. Activate the swap and verify with `swapon -s` and `free -h`
+4. Reboot and confirm the swap and its priority survived
+
+---
+
+**Task 19 — Create and Manage LVM** *(bravo, /dev/vdc)*
+
+> Objective: Create/remove physical volumes, assign to VGs, create/delete LVs
+
+Using `/dev/vdc` (full disk, unpartitioned):
+
+1. Initialize `/dev/vdc` as a physical volume
+2. Create a volume group `vg_lab` with PE size 16 MiB
+3. Create logical volume `lv_data` with size **500 MiB**
+4. Create logical volume `lv_logs` using **25 extents**
+5. Format `lv_data` as XFS and `lv_logs` as ext4
+6. Mount both persistently under `/mnt/lv_data` and `/mnt/lv_logs`
+7. Verify with `pvs`, `vgs`, `lvs`
+
+---
+
+**Task 20 — Extend a Logical Volume** *(bravo)*
+
+> Objective: Extend existing logical volumes, Add new partitions and LVs non-destructively
+
+Extend the `lv_data` logical volume (from Task 19) to **1 GiB** total size:
+
+1. Verify there is enough free space in `vg_lab`
+2. Extend the LV and grow the filesystem in one command
+3. Confirm the new size with `df -h /mnt/lv_data`
+
+---
+
+### SECTION 7: File Systems & NFS
+
+---
+
+**Task 21 — Configure NFS Server** *(bravo)*
+
+> Objective: Mount and unmount network file systems using NFS
+
+On `bravo` (NFS server):
+
+1. Install `nfs-utils`
+2. Create directories `/export/shared` and `/export/readonly`
+3. Make `/export/shared` genuinely writable by clients — you should be able to name more than one approach and justify the one you pick
+4. Add entries to `/etc/exports`:
+   - `/export/shared` — read/write for `192.168.100.0/24`
+   - `/export/readonly` — read-only for `192.168.100.10`
+5. Start and enable `nfs-server.service`
+6. Add permanent firewall rules for `nfs`, `mountd`, `rpc-bind`
+7. Confirm exports with `exportfs -v`
+
+---
+
+**Task 22 — Mount NFS on Client** *(alpha)*
+
+> Objective: Mount and unmount network file systems using NFS
+
+On `alpha` (NFS client):
+
+1. Create mount points `/mnt/nfs_shared` and `/mnt/nfs_ro`
+2. Mount them using NFS entries in `/etc/fstab` with the `_netdev` option
+3. Verify with `mount -a` and `df -hT`
+4. Create a test file in `/mnt/nfs_shared` and verify it appears on bravo
+
+---
+
+**Task 23 — Configure AutoFS** *(alpha)*
+
+> Objective: Configure autofs
+
+On `alpha`, configure `autofs` to automatically mount user home directories from bravo:
+
+1. Install `autofs`
+2. Configure a direct map for `/export/shared` from bravo at the local path `/autodir`
+3. Configure an indirect map so user home directories from `bravo:/export/home` auto-mount under `/mnt/autohome/<username>` on access
+4. Start and enable `autofs`
+5. Test by switching to a user whose home directory should be mounted
+
+> You will need to create and export `/export/home` on bravo first, with a test user whose home lives there.
+
+---
+
+**Task 24 — File Permission Diagnostics** *(alpha)*
+
+> Objective: Diagnose and correct file permission problems
+
+The following files and directories have incorrect permissions. Fix them:
+
+1. `/var/www/html/` — should be owned by `root:root`, world-readable, but not world-writable
+2. Create `/secure/app/` — owned by `alice:developers`, no access for others, SGID set
+3. A file `/tmp/badperms` exists with permissions `777` — change to `640`, owner `bob`, group `developers`
+4. Find all world-writable files under `/etc` and report them (save list to `/root/world_writable.txt`)
+
+---
+
+### SECTION 8: System Services, Logging & Time
+
+---
+
+**Task 25 — Configure Time Synchronization** *(both nodes)*
+
+> Objective: Configure time service clients
+
+1. Install `chrony` if not present
+2. Configure `/etc/chrony.conf` to use `pool 2.rhel.pool.ntp.org iburst` as the primary source
+3. Start and enable `chronyd`
+4. Verify sync with `chronyc tracking` and `timedatectl`
+5. Set the timezone to `America/Chicago` on alpha and `UTC` on bravo
+
+---
+
+**Task 26 — Manage Tuning Profiles** *(alpha)*
+
+> Objective: Manage tuning profiles
+
+1. Install and start the `tuned` service
+2. List all available profiles
+3. Display the currently active profile
+4. Change the active profile to `throughput-performance`
+5. Verify the active profile
+6. Set up a **merged profile** combining `virtual-guest` and `powersave` — create a custom profile called `lab-custom` in `/etc/tuned/lab-custom/`
+7. Apply `lab-custom` as the active profile
+8. Make sure it survives a reboot — verify every file that controls profile persistence on RHEL 10
+
+---
+
+**Task 27 — Process Management** *(alpha)*
+
+> Objective: Identify CPU/memory intensive processes and kill processes, Adjust process scheduling
+
+1. Launch three background `dd if=/dev/zero of=/dev/null` processes
+2. Use `ps`, `top`, or `pidstat` to identify them
+3. Use `renice` to change the niceness of one process to `10`
+4. Use `renice` to change the same process niceness to `-5` (requires root)
+5. Kill all `dd` processes using `killall`
+6. Start a `sleep 3600` process, then send it `SIGSTOP`, then `SIGCONT`, then `SIGTERM`
+7. Use `nice` to launch a new process `sleep 1000` with niceness `15`
+
+---
+
+**Task 28 — Persistent Journal and Log Management** *(both nodes)*
+
+> Objective: Locate and interpret system log files and journals, Preserve system journals
+
+1. Configure `systemd-journald` to store logs persistently by editing `/etc/systemd/journald.conf`
+2. Verify the journal directory is created at `/var/log/journal/`
+3. Use `journalctl` to:
+   - Show logs since last boot
+   - Filter logs for the `sshd` service
+   - Show only error-level and above messages
+   - Show the last 50 lines
+4. Configure `rsyslog` to write all `*.info` messages to `/var/log/messages.info`
+5. Use `logger` to send a test message and verify it appears in the correct log file
+
+---
+
+**Task 29 — Schedule Tasks** *(alpha)*
+
+> Objective: Schedule tasks using at, cron, and systemd timer units
+
+1. Using `at`, schedule a job to run in 5 minutes that appends `"Scheduled at task ran"` to `/var/log/at_test.log`
+2. Using `crontab -e` for user `alice`, create a cron job that appends the current date to `~/cron_test.log` every day at 8:00 AM
+3. Create a **systemd timer** unit that runs a script `/usr/local/bin/hourly_check.sh` every hour. The script should echo the date to `/var/log/hourly.log`
+   - Create the service unit: `/etc/systemd/system/hourly-check.service`
+   - Create the timer unit: `/etc/systemd/system/hourly-check.timer`
+   - Enable and start the timer
+
+---
+
+### SECTION 9: Shell Scripting
+
+---
+
+**Task 30 — Conditional Script** *(alpha)*
+
+> Objective: Conditionally execute code (if, test, [], etc.), Process script inputs ($1, $2, etc.)
+
+Write a script `/usr/local/bin/syscheck.sh` that:
+
+- Accepts one argument: `cpu`, `mem`, `disk`, or `all`
+- If `cpu`: display CPU model from `/proc/cpuinfo`
+- If `mem`: display total and available memory from `free -h`
+- If `disk`: display disk usage summary from `df -hT`
+- If `all`: run all three checks
+- If no argument or invalid argument: print usage instructions and exit with code `1`
+- Make the script executable and test each argument
+
+---
+
+**Task 31 — Looping Script with User Creation** *(alpha)*
+
+> Objective: Use looping constructs (for, etc.), Processing output of shell commands within a script
+
+Write a script `/usr/local/bin/bulk_users.sh` that:
+
+- Reads usernames from `/root/userlist.txt` (create this file with 5 usernames)
+- For each username:
+  - Create the user if it does not already exist
+  - Set the password equal to the username
+  - Print a success or "already exists" message
+- Use a `for` loop with command substitution
+
+---
+
+**Task 32 — Backup Script with Cron** *(alpha)*
+
+> Objective: Process output of shell commands within a script
+
+Write a script `/root/etcbackup.sh` that:
+
+- Creates a compressed tar archive of `/etc` named with the current date: `etc_backup_YYYY-MM-DD.tar.gz`
+- Saves it to `/root/backups/` (create if not exists)
+- Removes backups older than 7 days
+- Logs the backup filename and timestamp to `/var/log/etcbackup.log`
+
+Schedule this script to run at **11:30 PM every night except Sunday** using cron.
+
+---
+
+### SECTION 10: SELinux
+
+---
+
+**Task 33 — SELinux Modes and Contexts** *(both nodes)*
+
+> Objective: Set enforcing/permissive modes, list/identify SELinux file and process context
+
+1. On `alpha`: Confirm SELinux is in `enforcing` mode — set it persistently if not
+2. On `bravo`: Set SELinux to `permissive` mode persistently (edit `/etc/selinux/config`)
+3. On `alpha`:
+   - Create `/webtest/index.html` with content `"Hello RHCSA"`
+   - Check the SELinux context — it will be wrong for serving with httpd
+   - Use `semanage fcontext` to add the correct `httpd_sys_content_t` context for `/webtest(/.*)?`
+   - Apply the context with `restorecon -Rv /webtest`
+   - Start httpd and verify the page is served
+
+---
+
+**Task 34 — SELinux Ports and Booleans** *(alpha)*
+
+> Objective: Manage SELinux port labels, Use boolean settings to modify SELinux settings, Restore default file contexts
+
+1. Configure `httpd` to listen on port `8181`
+   - Add the non-standard port to the SELinux policy for `http_port_t`
+   - Confirm with `semanage port -l | grep http`
+2. Check the current state of the boolean `httpd_can_network_connect`
+3. Enable the boolean persistently
+4. Check the boolean `httpd_enable_homedirs` and enable it persistently
+5. Copy `/etc/hosts` to `/var/www/html/hosts.txt` — check and restore the SELinux context
+
+---
+
+### SECTION 11: Containers with Podman
+
+---
+
+**Task 35 — Deploy a Container as a Systemd Service (Quadlet)** *(alpha, as alice)*
+
+> Objective: Find/retrieve container images, Inspect images, Run containers, Configure container as systemd service, Attach persistent storage
+
+As user `alice` (rootless container):
+
+1. Search for and pull the `ubi10/httpd-24` image from `registry.access.redhat.com`
+2. Inspect the image and identify the exposed port
+3. Create a directory `~/web_content/` and add a file `index.html` with content: `"Welcome to Alice's Containerized Web Server!"`
+4. Run the container named `alice_web` in detached mode:
+   - Map local port `8080` to container port `8080`
+   - Bind-mount `~/web_content/` to `/var/www/html/` with `:Z` for SELinux
+5. Verify the container is running with `podman ps`
+6. Test with `curl http://localhost:8080`
+7. Create a **Podman Quadlet** at `~/.config/containers/systemd/alice-web.container` that reproduces that container as a user systemd service, starting at login. It must set the image, container name, published port, and the bind-mounted volume with the correct SELinux relabel flag, and restart always.
+8. Enable user lingering for `alice`
+9. Reload the user daemon and start the service
+10. Reboot and confirm the container starts automatically and the webpage is accessible
+
+---
+
+## 📊 Grading Checklist
+
+Mark each task after verifying it survives a reboot where applicable.
+
+| #  | Task                                      | Reboot Test | Done |
+| -- | ----------------------------------------- | ----------- | ---- |
+| 1  | Break into bravo, reset root password     | ✓          | [ ]  |
+| 2  | Set default boot target to multi-user     | ✓          | [ ]  |
+| 3  | Modify bootloader (GRUB_TIMEOUT, quiet)   | ✓          | [ ]  |
+| 4  | Static IP + IPv6 + hostname + /etc/hosts  | ✓          | [ ]  |
+| 5  | Firewall rules (SSH, HTTP, ports)         | ✓          | [ ]  |
+| 6  | Create users/groups with UIDs/GIDs        | ✓          | [ ]  |
+| 7  | Password aging policies                   | ✓          | [ ]  |
+| 8  | sudo access (groups, command alias)       | ✓          | [ ]  |
+| 9  | Set-GID collaborative directory           | ✓          | [ ]  |
+| 10 | System-wide umask 0007                    | ✓          | [ ]  |
+| 11 | Key-based SSH (root + alice)              | ✓          | [ ]  |
+| 12 | scp, rsync, sftp transfers                | —          | [ ]  |
+| 13 | Configure local DNF repo from ISO         | ✓          | [ ]  |
+| 14 | Package install/remove/query with RPM+DNF | —          | [ ]  |
+| 15 | Package groups + Flatpak + versioned RPM  | —          | [ ]  |
+| 16 | GPT partitions on /dev/vdb                | ✓          | [ ]  |
+| 17 | Format + mount by UUID and LABEL          | ✓          | [ ]  |
+| 18 | Swap partition with priority              | ✓          | [ ]  |
+| 19 | Create LVM (PV, VG, LV) with PE size      | ✓          | [ ]  |
+| 20 | Extend LV and grow filesystem live        | ✓          | [ ]  |
+| 21 | NFS server with exports + firewall        | ✓          | [ ]  |
+| 22 | NFS client persistent mount               | ✓          | [ ]  |
+| 23 | AutoFS (direct map + indirect home dirs)  | ✓          | [ ]  |
+| 24 | File permission diagnostics + fix         | ✓          | [ ]  |
+| 25 | Chrony NTP + timezone                     | ✓          | [ ]  |
+| 26 | Tuned profile + custom merged profile     | ✓          | [ ]  |
+| 27 | Process management (nice/renice/kill)     | —          | [ ]  |
+| 28 | Persistent journal + rsyslog rule         | ✓          | [ ]  |
+| 29 | at + cron + systemd timer                 | ✓          | [ ]  |
+| 30 | Conditional shell script (syscheck.sh)    | —          | [ ]  |
+| 31 | Looping user creation script              | —          | [ ]  |
+| 32 | Backup script + cron job                  | ✓          | [ ]  |
+| 33 | SELinux modes + fcontext + restorecon     | ✓          | [ ]  |
+| 34 | SELinux ports + booleans                  | ✓          | [ ]  |
+| 35 | Podman container + Quadlet service        | ✓          | [ ]  |
+
+**Score: ___ / 35**
+
+> Passing threshold (real exam ~70%): **25 / 35**
+
+---
+
+## ✅ Quick Verification Script
+
+Run on the relevant host **after a reboot**. Checks the objectively-verifiable, persistence-sensitive items only — it is a safety net against marking something "done" that didn't actually persist, not a full grader. Tasks needing human judgement (T11 SSH keys, T12 transfers, T30–32 script behaviour) aren't covered.
+
+```bash
+#!/usr/bin/env bash
+# ex1-verify.sh — spot-check Exam 1 persistence. Run with sudo on each host.
+pass=0; fail=0
+chk() { # chk "label" "command"
+  if eval "$2" &>/dev/null; then printf '  \033[32mPASS\033[0m  %s\n' "$1"; pass=$((pass+1))
+  else printf '  \033[31mFAIL\033[0m  %s\n' "$1"; fail=$((fail+1)); fi
+}
+
+echo "== Host: $(hostname -s) =="
+
+case "$(hostname -s)" in
+  *alpha*)
+    chk "T3  GRUB_TIMEOUT=10"          "grep -q '^GRUB_TIMEOUT=10' /etc/default/grub"
+    chk "T3  countdown style"          "grep -q '^GRUB_TIMEOUT_STYLE=countdown' /etc/default/grub"
+    chk "T4  hostname alpha.lab.local" "hostnamectl --static | grep -qx alpha.lab.local"
+    chk "T4  static IPv4 .10"          "ip -4 addr show | grep -q '192.168.100.10'"
+    chk "T4  IPv6 fd00::10"            "ip -6 addr show | grep -q 'fd00::10'"
+    chk "T4  bravo in /etc/hosts"      "grep -q 'bravo.lab.local' /etc/hosts"
+    chk "T5  http permanent"           "firewall-cmd --list-services | grep -q http"
+    chk "T5  internal 5900-5910"       "firewall-cmd --zone=internal --list-ports | grep -q 5900-5910"
+    chk "T6  alice uid 1050"           "id -u alice | grep -qx 1050"
+    chk "T6  developers gid 5001"      "getent group developers | grep -q ':5001:'"
+    chk "T6  carol nologin"            "getent passwd carol | grep -qE '(nologin|false)$'"
+    chk "T7  alice max 60 days"        "chage -l alice | grep -qi 'Maximum.*60'"
+    chk "T8  sudoers drop-in valid"    "visudo -c &>/dev/null"
+    chk "T9  devshare setgid+sticky"   "stat -c '%a' /data/devshare | grep -qx 3770"
+    chk "T9  devshare owner"           "stat -c '%U:%G' /data/devshare | grep -qx alice:developers"
+    chk "T10 umask drop-in"            "grep -rq 'umask 0*007' /etc/profile.d/"
+    chk "T13 iso mounted"              "findmnt /mnt/rhel10iso"
+    chk "T13 repo enabled"             "dnf repolist 2>/dev/null | grep -qi appstream"
+    chk "T13 fstab has nofail"         "grep -q '/mnt/rhel10iso' /etc/fstab && grep '/mnt/rhel10iso' /etc/fstab | grep -q nofail"
+    chk "T24 /var/www/html 755 root"   "stat -c '%a %U' /var/www/html | grep -qx '755 root'"
+    chk "T24 /secure/app 2770"         "stat -c '%a' /secure/app | grep -qx 2770"
+    chk "T24 badperms 640 bob"         "stat -c '%a %U:%G' /tmp/badperms | grep -qx '640 bob:developers'"
+    chk "T25 chronyd enabled"          "systemctl is-enabled --quiet chronyd"
+    chk "T25 timezone Chicago"         "timedatectl show -p Timezone --value | grep -qx America/Chicago"
+    chk "T26 tuned lab-custom active"  "tuned-adm active | grep -q lab-custom"
+    chk "T26 ppd_base_profile set"     "grep -q lab-custom /etc/tuned/ppd_base_profile"
+    chk "T28 journal persistent"       "test -d /var/log/journal"
+    chk "T28 rsyslog *.info rule"      "grep -qE '^\\*\\.info' /etc/rsyslog.conf"
+    chk "T29 hourly timer enabled"     "systemctl is-enabled --quiet hourly-check.timer"
+    chk "T29 alice cron 8am"           "crontab -l -u alice 2>/dev/null | grep -q '^0 8'"
+    chk "T32 etcbackup cron"           "crontab -l 2>/dev/null | grep -q 'etcbackup.sh'"
+    chk "T33 SELinux enforcing"        "getenforce | grep -qx Enforcing"
+    chk "T33 webtest labeled"          "ls -Zd /webtest | grep -q httpd_sys_content_t"
+    chk "T34 port 8181 labeled"        "semanage port -l | grep http_port_t | grep -q 8181"
+    chk "T34 httpd_can_network_connect" "getsebool httpd_can_network_connect | grep -q ' on$'"
+    chk "T34 httpd_enable_homedirs"    "getsebool httpd_enable_homedirs | grep -q ' on$'"
+    chk "T35 linger enabled for alice" "loginctl show-user alice -p Linger | grep -qi yes"
+    chk "T35 container serving 8080"   "curl -sf http://localhost:8080/ | grep -qi alice"
+    ;;
+  *bravo*)
+    chk "T2  default multi-user"       "systemctl get-default | grep -qx multi-user.target"
+    chk "T4  hostname bravo.lab.local" "hostnamectl --static | grep -qx bravo.lab.local"
+    chk "T4  static IPv4 .20"          "ip -4 addr show | grep -q '192.168.100.20'"
+    chk "T10 umask drop-in"            "grep -rq 'umask 0*007' /etc/profile.d/"
+    chk "T16 three partitions on vdb"  "test \$(lsblk -no NAME /dev/vdb | tail -n +2 | wc -l) -eq 3"
+    chk "T17 xfs_data mounted"         "findmnt /mnt/xfs_data"
+    chk "T17 mounted by UUID"          "grep -q '^UUID=' /etc/fstab && grep '/mnt/xfs_data' /etc/fstab | grep -q UUID"
+    chk "T17 ext4_data by LABEL"       "grep '/mnt/ext4_data' /etc/fstab | grep -q 'LABEL=DATASTORE'"
+    chk "T18 swap active"              "swapon --show | grep -q /dev/vdb2"
+    chk "T18 swap priority 10"         "swapon --show=PRIO --noheadings | grep -q 10"
+    chk "T19 vg_lab 16M PE"            "vgs --noheadings -o vg_extent_size vg_lab | grep -q '16'"
+    chk "T19 lv_data mounted"          "findmnt /mnt/lv_data"
+    chk "T19 lv_logs mounted"          "findmnt /mnt/lv_logs"
+    chk "T20 lv_data is 1G"            "lvs --noheadings -o lv_size vg_lab/lv_data | grep -q '1\\.00g'"
+    chk "T21 nfs-server running"       "systemctl is-active --quiet nfs-server"
+    chk "T21 exports present"          "exportfs -v | grep -q /export/shared"
+    chk "T21 nfs firewall"             "firewall-cmd --list-services | grep -q nfs"
+    chk "T33 SELinux permissive"       "grep -qE '^SELINUX=permissive' /etc/selinux/config"
+    ;;
+esac
+
+echo "== $pass passed, $fail failed =="
+```
+
+---
+
+---
+
+# 🔑 ANSWER KEY
+
+> **Stop.** Do not read this during a timed run. Score yourself from the checklist first, then come back here for the tasks you missed.
+
+---
+
+### Section 1 — System Recovery & Boot Management
+
+**T1 — Break into bravo**
+
+> Note from an earlier run: rd.break drops to an emergency mode, not a shell — `init=/bin/bash` is the method used here. *(Worth re-verifying on RHEL 10; standard Red Hat courseware still documents `rd.break` as valid.)*
+
+Key steps: `init=/bin/bash`, `mount -o remount,rw /`, `passwd root`, `touch /.autorelabel`, `exec /sbin/reboot -f`
+
+**T2 — Boot target**
+
+```
+systemctl get-default
+systemctl set-default multi-user.target
+```
+
+**T3 — Bootloader**
+
+```
+vim /etc/default/grub
+grub2-mkconfig -o /boot/grub2/grub.cfg   # BIOS
+# OR
+grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg  # UEFI
+```
+
+---
+
+### Section 2 — Networking & Hostname
+
+**T4 — Static IP and hostname**
+
+```bash
+nmcli con show # get interface name
+sudo nmcli con add type ethernet ifname "interface-name" con-name "connection-name"
+nmcli con mod "connection-name" ipv4.addresses 192.168.100.10/24 ipv4.gateway 192.168.100.1 ipv4.method manual
+nmcli con mod "connection-name" ipv4.dns "8.8.8.8 1.1.1.1"
+nmcli con mod "connection-name" ipv6.addresses fd00::10/64 ipv6.method manual
+nmcli con up "connection-name"
+hostnamectl set-hostname alpha.lab.local
+```
+
+**T5 — Firewall**
+
+```bash
+firewall-cmd --permanent --add-service=ssh
+firewall-cmd --permanent --add-service=http
+firewall-cmd --add-port=8080/tcp
+firewall-cmd --permanent --zone=internal --add-port=5900-5910/tcp
+firewall-cmd --reload
+firewall-cmd --list-all
+firewall-cmd --zone=internal --list-all
+```
+
+---
+
+### Section 3 — Users, Groups & Permissions
+
+**T7 — Password aging**
+
+```bash
+for user in alice bob carol dave; do echo "${user}:Lab@12345"; done | sudo chpasswd
+sudo chage alice -m 7 -M 60 -W 10
+sudo passwd bob -n 5 -x 90 -w 14 -i 10
+sudo chage carol -d 0
+```
+
+Then set `PASS_MIN_LEN 8` in `/etc/login.defs`.
+
+**T9 — Set-GID collaborative directory**
+
+```bash
+mkdir -p /data/devshare
+chown alice:developers /data/devshare
+chmod 3770 /data/devshare
+```
+
+Mode `3770` = SGID (2000) + sticky (1000) + `rwxrwx---`.
+
+**T10 — Umask**
+
+```bash
+# In /etc/profile.d/umask.sh
+umask 0007
+```
+
+`umask 007` → files `666-007 = 660`, directories `777-007 = 770`.
+
+---
+
+### Section 5 — Software Management
+
+**T13 — Repositories**
 
 ```bash
 sudo mount /dev/sr0 /mnt/rhel10iso
@@ -340,33 +886,21 @@ ls /mnt/rhel10iso/
 # Make persist past reboot
 echo '/dev/sr0  /mnt/rhel10iso  iso9660  ro,nofail  0 0' | sudo tee -a /etc/fstab
 
-# Test persitence without reboot
+# Test persistence without reboot
 sudo umount /mnt/rhel10iso 2>/dev/null
 sudo mount -a
 sudo dnf repolist
 ls /mnt/rhel10iso/
 ```
 
----
-
-**Task 14 — Package Management Operations** *(alpha)*
-
-> Objective: Install and remove RPM software packages
-
-- Install the `vim-enhanced`, `tmux`, and `wget` packages
-- Verify `httpd` package is not installed; install it
-- Query the installed `httpd` package and list all its configuration files
-- Download (but don't install) the `nmap` package RPM to `/root/downloads/`
-- Use `rpm` to verify the integrity of a package file
-- Install `nmap` from the downloaded RPM
-- Remove `nmap` with `rpm`
+**T14 — Package management**
 
 ```bash
 sudo dnf install vim-enhanced tmux wget httpd -y
 rpm -qc httpd
 sudo dnf download --destdir /root/downloads/ nmap
 # using * with sudo expands as the user not root and returns nothing.  
-# Use sudo bash -c to start a root shell to run the command to see the proper expansion or type the whole filename"
+# Use sudo bash -c to start a root shell to run the command to see the proper expansion or type the whole filename
 sudo bash -c 'rpm -K /root/downloads/nmap-*.rpm' 
 sudo bash -c 'rpm -ivh /root/downloads/nmap-*.rpm'
 sudo rpm -e nmap
@@ -375,32 +909,16 @@ sudo rpm -e nmap
 sudo rpm -qa nmap
 ```
 
----
-
-**Task 15 — Package Groups & Flatpak *(alpha)***
-
-> Objective: Install and update software packages from Red Hat CDN, remote repository, or local file system (RHEL 10 objectives — RPM + Flatpak; modularity is deprecated)
-
-Part A — Package groups:
-
-- List available package groups
-- Install the "Development Tools" group
-- Remove it
+**T15 — Package groups, Flatpak, versioned RPMs**
 
 ```bash
+# Part A
 sudo dnf group list
 sudo dnf group info "Development Tools"
 sudo dnf group install "Development Tools" -y
 sudo dnf group remove "Development Tools" -y
-```
 
-Part B — Flatpak (now a mandatory RHCSA objective):
-
-- Add the Flathub remote
-- Search for, install, run, update, and remove an application
-- Clean up unused runtimes
-
-```bash
+# Part B
 flatpak remotes
 flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
 flatpak search gimp
@@ -410,13 +928,8 @@ flatpak run org.gimp.GIMP
 flatpak update -y
 flatpak uninstall org.gimp.GIMP -y
 flatpak uninstall --unused -y
-```
 
-Part C — Installing an alternate app-stream version (the modern replacement for module streams):
-
-- In RHEL 10, postgresql ships as a plain RPM (v16 default); alternate versions are versioned packages, NOT modules
-
-```bash
+# Part C
 dnf list postgresql\*        # discover available versioned packages
 sudo dnf install postgresql-server -y
 rpm -q postgresql-server
@@ -426,24 +939,9 @@ rpm -q postgresql-server
 
 ---
 
-### SECTION 6: Storage — Partitions, LVM & Swap
+### Section 6 — Storage
 
-> **Note:** These tasks use the extra disk `/dev/vdb` on bravo (or alpha if you added one)
-
----
-
-**Task 16 — Create GPT Partitions** *(bravo, /dev/vdb)*
-
-> Objective: List, create, delete partitions on GPT disks
-
-Using `/dev/vdb` on bravo:
-
-1. Create a GPT partition table
-2. Create a 1 GiB partition (`vdb1`) — type: Linux filesystem
-3. Create a 500 MiB partition (`vdb2`) — type: Linux swap
-4. Create a 2 GiB partition (`vdb3`) — type: Linux filesystem
-5. Run `partprobe` to inform the kernel
-6. Verify with `lsblk` and `fdisk -l /dev/vdb`
+**T16 — GPT partitions**
 
 ```bash
 # Open fdisk
@@ -493,18 +991,7 @@ Expected Result:
 /dev/vdb3    2G    Linux filesystem
 ```
 
----
-
-**Task 17 — Create and Mount File Systems by UUID** *(bravo)*
-
-> Objective: Configure systems to mount file systems at boot by UUID or label, Create/mount/unmount VFAT, ext4, XFS
-
-1. Format `vdb1` as **XFS**
-2. Format `vdb3` as **ext4** with label `DATASTORE`
-3. Create mount points `/mnt/xfs_data` and `/mnt/ext4_data`
-4. Add persistent entries to `/etc/fstab` using **UUID** for xfs_data and **LABEL** for ext4_data
-5. Run `mount -a` and verify with `df -hT`
-6. Create a test file in each mount point and reboot to confirm persistence
+**T17 — Filesystems by UUID and LABEL**
 
 ```bash
 # Create filesystems
@@ -555,15 +1042,7 @@ Expected Result:
 /mnt/ext4_data/ext4_test.txt exists
 ```
 
----
-
-**Task 18 — Configure Swap Space** *(bravo)*
-
-> Objective: Add new partitions, logical volumes, and swap to a system non-destructively
-
-1. Format `vdb2` as swap with label `EXTRASWAP`
-2. Add a persistent swap entry to `/etc/fstab` with priority `10`
-3. Activate the swap and verify with `swapon -s` and `free -h`
+**T18 — Swap with priority**
 
 ```bash
 # Create swap signature
@@ -572,8 +1051,8 @@ sudo mkswap /dev/vdb2
 # Get UUID
 UUID=$(sudo blkid -s UUID -o value /dev/vdb2)
 
-# Add persistent swap entry
-echo "UUID=${UUID} none swap defaults 0 0" | sudo tee -a /etc/fstab
+# Add persistent swap entry with priority 10
+echo "UUID=${UUID} none swap defaults,pri=10 0 0" | sudo tee -a /etc/fstab
 
 # Verify fstab
 tail -1 /etc/fstab
@@ -600,7 +1079,7 @@ Expected Result:
 
 ```text
 NAME      TYPE SIZE USED PRIO
-/dev/vdb2 partition 500M   0B   -2
+/dev/vdb2 partition 500M   0B   10
 ```
 
 And:
@@ -609,21 +1088,7 @@ And:
 Swap: 500M
 ```
 
----
-
-**Task 19 — Create and Manage LVM** *(bravo, /dev/vdc)*
-
-> Objective: Create/remove physical volumes, assign to VGs, create/delete LVs
-
-Using `/dev/vdc` (full disk, unpartitioned):
-
-1. Initialize `/dev/vdc` as a physical volume
-2. Create a volume group `vg_lab` with PE size 16 MiB
-3. Create logical volume `lv_data` with size **500 MiB**
-4. Create logical volume `lv_logs` using **25 extents**
-5. Format `lv_data` as XFS and `lv_logs` as ext4
-6. Mount both persistently under `/mnt/lv_data` and `/mnt/lv_logs`
-7. Verify with `pvs`, `vgs`, `lvs`
+**T19 — LVM**
 
 ```bash
 # Create physical volume
@@ -671,20 +1136,10 @@ Expected Result:
 PV: /dev/vdc     VG: vg_lab
 VG PE size: 16.00 MiB
 lv_data  500.00m  (XFS)   -> /mnt/lv_data
-lv_l
+lv_logs  400.00m  (ext4)  -> /mnt/lv_logs     # 25 extents x 16 MiB
 ```
 
----
-
-**Task 20 — Extend a Logical Volume** *(bravo)*
-
-> Objective: Extend existing logical volumes, Add new partitions and LVs non-destructively
-
-Extend the `lv_data` logical volume (from Task 19) to **1 GiB** total size:
-
-1. Verify there is enough free space in `vg_lab`
-2. Extend the LV and grow the filesystem in one command
-3. Confirm the new size with `df -h /mnt/lv_data`
+**T20 — Extend an LV**
 
 ```bash
 # Verify free space in the volume group
@@ -708,24 +1163,9 @@ df -h shows /mnt/lv_data ~1.0G
 
 ---
 
-### SECTION 7: File Systems & NFS
+### Section 7 — File Systems & NFS
 
----
-
-**Task 21 — Configure NFS Server** *(bravo)*
-
-> Objective: Mount and unmount network file systems using NFS
-
-On `bravo` (NFS server):
-
-1. Install `nfs-utils`
-2. Create directories `/export/shared` and `/export/readonly`
-3. Add entries to `/etc/exports`:
-   - `/export/shared` — read/write for `192.168.100.0/24`
-   - `/export/readonly` — read-only for `192.168.100.10`
-4. Start and enable `nfs-server.service`
-5. Add permanent firewall rules for `nfs`, `mountd`, `rpc-bind`
-6. Confirm exports with `exportfs -v`
+**T21 — NFS server**
 
 ```bash
 # Install NFS utilities
@@ -793,18 +1233,7 @@ Expected Result:
 /export/readonly  192.168.100.10(ro,sync,...)
 ```
 
----
-
-**Task 22 — Mount NFS on Client** *(alpha)*
-
-> Objective: Mount and unmount network file systems using NFS
-
-On `alpha` (NFS client):
-
-1. Create mount points `/mnt/nfs_shared` and `/mnt/nfs_ro`
-2. Mount them using NFS entries in `/etc/fstab` with the `_netdev` option
-3. Verify with `mount -a` and `df -hT`
-4. Create a test file in `/mnt/nfs_shared` and verify it appears on bravo
+**T22 — NFS client**
 
 ```bash
 # Install NFS utilities (needed for the client too)
@@ -845,22 +1274,9 @@ Expected Result:
 /export/shared/from_alpha.txt   visible on bravo
 ```
 
----
+**T23 — AutoFS**
 
-**Task 23 — Configure AutoFS** *(alpha)*
-
-> Objective: Configure autofs
-
-On `alpha`, configure `autofs` to automatically mount user home directories from bravo:
-
-1. Install `autofs`
-2. Configure a direct map for `/export/shared` from bravo at the local path `/autodir`
-3. Configure an indirect map so user home directories from `bravo:/export/home` auto-mount under `/mnt/autohome/<username>` on access
-4. Start and enable `autofs`
-5. Test by switching to a user whose home directory should be mounted
-
-
-> Prerequisite — export /export/home on bravo
+Prerequisite — export /export/home on bravo:
 
 ```bash
 # On bravo
@@ -915,20 +1331,7 @@ bravo:/export/shared          -> /autodir           (auto-mounted on access)
 bravo:/export/home/autouser   -> /mnt/autohome/autouser (auto-mounted on access)
 ```
 
-
----
-
-**Task 24 — File Permission Diagnostics** *(alpha)*
-
-> Objective: Diagnose and correct file permission problems
-
-The following files and directories have incorrect permissions. Fix them:
-
-1. `/var/www/html/` — should be owned by `root:root`, world-readable, but not world-writable
-2. Create `/secure/app/` — owned by `alice:developers`, no access for others, SGID set
-3. A file `/tmp/badperms` exists with permissions `777` — change to `640`, owner `bob`, group `developers`
-4. Find all world-writable files under `/etc` and report them (save list to `/root/world_writable.txt`)
-
+**T24 — Permission diagnostics**
 
 ```bash
 # Fix /var/www/html — root:root, world-readable, not world-writable
@@ -961,6 +1364,7 @@ sudo find /etc -perm -o+w -type f > /root/world_writable.txt
 # Verify
 sudo cat /root/world_writable.txt
 ```
+
 **Expected Results:**
 
 ```text
@@ -972,20 +1376,9 @@ sudo cat /root/world_writable.txt
 
 ---
 
-### SECTION 8: System Services, Logging & Time
+### Section 8 — System Services, Logging & Time
 
----
-
-**Task 25 — Configure Time Synchronization** *(both nodes)*
-
-> Objective: Configure time service clients
-
-1. Install `chrony` if not present
-2. Configure `/etc/chrony.conf` to use `pool 2.rhel.pool.ntp.org iburst` as the primary source
-3. Start and enable `chronyd`
-4. Verify sync with `chronyc tracking` and `timedatectl`
-5. Set the timezone to `America/Chicago` on alpha and `UTC` on bravo
-
+**T25 — Chrony**
 
 ```bash
 # Install chrony if not present
@@ -1017,20 +1410,7 @@ sudo timedatectl set-timezone UTC
 timedatectl
 ```
 
----
-
-**Task 26 — Manage Tuning Profiles** *(alpha)*
-
-> Objective: Manage tuning profiles
-
-1. Install and start the `tuned` service
-2. List all available profiles
-3. Display the currently active profile
-4. Change the active profile to `throughput-performance`
-5. Verify the active profile
-6. Set up a **merged profile** combining `virtual-guest` and `powersave` — create a custom profile called `lab-custom` in `/etc/tuned/lab-custom/`
-7. Apply `lab-custom` as the active profile
-
+**T26 — Tuned**
 
 ```bash
 # Install, enable, and start tuned
@@ -1060,8 +1440,8 @@ EOF
 # Apply lab-custom and verify
 sudo tuned-adm profile lab-custom
 
-# In RHEL 10 power-profiles-daemon (ppd) is layerd on top of
-# tuned and will override the profile after reboot if now set directly
+# In RHEL 10 power-profiles-daemon (ppd) is layered on top of
+# tuned and will override the profile after reboot if not set directly
 echo "lab-custom" | sudo tee /etc/tuned/ppd_base_profile
 sudo systemctl restart tuned
 tuned-adm active
@@ -1088,35 +1468,7 @@ tuned-adm list | grep lab-custom   # confirm it appears in the profile list
 tuned-adm active  ->  Current active profile: lab-custom
 ```
 
----
-
-**Task 27 — Process Management** *(alpha)*
-
-> Objective: Identify CPU/memory intensive processes and kill processes, Adjust process scheduling
-
-1. Launch three background `dd if=/dev/zero of=/dev/null` processes
-2. Use `ps`, `top`, or `pidstat` to identify them
-3. Use `renice` to change the niceness of one process to `10`
-4. Use `renice` to change the same process niceness to `-5` (requires root)
-5. Kill all `dd` processes using `killall`
-6. Start a `sleep 3600` process, then send it `SIGSTOP`, then `SIGCONT`, then `SIGTERM`
-7. Use `nice` to launch a new process `sleep 1000` with niceness `15`
-
----
-
-**Task 28 — Persistent Journal and Log Management** *(both nodes)*
-
-> Objective: Locate and interpret system log files and journals, Preserve system journals
-
-1. Configure `systemd-journald` to store logs persistently by editing `/etc/systemd/journald.conf`
-2. Verify the journal directory is created at `/var/log/journal/`
-3. Use `journalctl` to:
-   - Show logs since last boot
-   - Filter logs for the `sshd` service
-   - Show only error-level and above messages
-   - Show the last 50 lines
-4. Configure `rsyslog` to write all `*.info` messages to `/var/log/messages.info`
-5. Use `logger` to send a test message and verify it appears in the correct log file
+**T27 — Process management**
 
 ```bash
 # Launch three background dd processes
@@ -1179,18 +1531,57 @@ Step 5:  all dd processes gone
 Step 6:  STAT T (stopped) -> S (sleeping) -> process ends
 Step 7:  new sleep with NI = 15
 ```
----
 
-**Task 29 — Schedule Tasks** *(alpha)*
+**T28 — Persistent journal and rsyslog**
 
-> Objective: Schedule tasks using at, cron, and systemd timer units
+```bash
+# Configure journald for persistent storage
+sudo sed -i 's/^#\?Storage=.*/Storage=persistent/' /etc/systemd/journald.conf
 
-1. Using `at`, schedule a job to run in 5 minutes that appends `"Scheduled at task ran"` to `/var/log/at_test.log`
-2. Using `crontab -e` for user `alice`, create a cron job that appends the current date to `~/cron_test.log` every day at 8:00 AM
-3. Create a **systemd timer** unit that runs a script `/usr/local/bin/hourly_check.sh` every hour. The script should echo the date to `/var/log/hourly.log`
-   - Create the service unit: `/etc/systemd/system/hourly-check.service`
-   - Create the timer unit: `/etc/systemd/system/hourly-check.timer`
-   - Enable and start the timer
+# Create the persistent journal directory (journald will also do this itself on restart)
+sudo mkdir -p /var/log/journal
+sudo systemd-tmpfiles --create --prefix /var/log/journal
+
+# Restart journald to apply
+sudo systemctl restart systemd-journald
+
+# Verify the directory exists and journald is using it
+ls -ld /var/log/journal
+journalctl --disk-usage
+
+# Logs since last boot
+journalctl -b
+
+# Filter logs for the sshd service
+journalctl -u sshd
+
+# Only error-level and above
+journalctl -p err
+
+# Last 50 lines
+journalctl -n 50
+
+# Configure rsyslog to write all *.info messages to /var/log/messages.info
+echo "*.info    /var/log/messages.info" | sudo tee -a /etc/rsyslog.conf
+
+# Restart rsyslog to apply
+sudo systemctl restart rsyslog
+
+# Send a test message and verify it landed in the right log
+logger "RHCSA test message from $(hostname)"
+grep "RHCSA test message" /var/log/messages.info
+```
+
+Expected Results:
+
+```text
+Step 1-2:  /etc/systemd/journald.conf has Storage=persistent; /var/log/journal/ exists after restart
+Step 3:    journalctl -b, -u sshd, -p err, -n 50 all return filtered output
+Step 4:    /var/log/messages.info receives *.info and higher messages after rsyslog restart
+Step 5:    logger test line appears in /var/log/messages.info
+```
+
+**T29 — at, cron, systemd timer**
 
 ```bash
 # 1. at — one-time job in 5 minutes
@@ -1261,25 +1652,12 @@ at:      atq shows one queued job
 cron:    crontab -l -u alice shows the 8:00 AM line
 timer:   list-timers shows hourly-check.timer with a NEXT run time
 ```
----
-
-### SECTION 9: Shell Scripting
 
 ---
 
-**Task 30 — Conditional Script** *(alpha)*
+### Section 9 — Shell Scripting
 
-> Objective: Conditionally execute code (if, test, [], etc.), Process script inputs ($1, $2, etc.)
-
-Write a script `/usr/local/bin/syscheck.sh` that:
-
-- Accepts one argument: `cpu`, `mem`, `disk`, or `all`
-- If `cpu`: display CPU model from `/proc/cpuinfo`
-- If `mem`: display total and available memory from `free -h`
-- If `disk`: display disk usage summary from `df -hT`
-- If `all`: run all three checks
-- If no argument or invalid argument: print usage instructions and exit with code `1`
-- Make the script executable and test each argument
+**T30 — syscheck.sh**
 
 ```bash
 sudo tee /usr/local/bin/syscheck.sh <<'EOF'
@@ -1331,20 +1709,8 @@ syscheck.sh              # no arg -> usage, exit 1
 syscheck.sh badarg       # invalid -> usage, exit 1
 echo "Exit code: $?"     # should be 1 for bad/no arg
 ```
----
 
-**Task 31 — Looping Script with User Creation** *(alpha)*
-
-> Objective: Use looping constructs (for, etc.), Processing output of shell commands within a script
-
-Write a script `/usr/local/bin/bulk_users.sh` that:
-
-- Reads usernames from `/root/userlist.txt` (create this file with 5 usernames)
-- For each username:
-  - Create the user if it does not already exist
-  - Set the password equal to the username
-  - Print a success or "already exists" message
-- Use a `for` loop with command substitution
+**T31 — bulk_users.sh**
 
 ```bash
 # Create the username list
@@ -1383,20 +1749,7 @@ sudo /usr/local/bin/bulk_users.sh
 for u in $(cat /root/userlist.txt); do id "$u"; done
 ```
 
----
-
-**Task 32 — Backup Script with Cron** *(alpha)*
-
-> Objective: Process output of shell commands within a script
-
-Write a script `/root/etcbackup.sh` that:
-
-- Creates a compressed tar archive of `/etc` named with the current date: `etc_backup_YYYY-MM-DD.tar.gz`
-- Saves it to `/root/backups/` (create if not exists)
-- Removes backups older than 7 days
-- Logs the backup filename and timestamp to `/var/log/etcbackup.log`
-
-Schedule this script to run at **11:30 PM every night except Sunday** using cron.
+**T32 — etcbackup.sh**
 
 ```bash
 # Create the backup script
@@ -1438,38 +1791,14 @@ sudo crontab -e
 
 sudo crontab -l
 ```
----
 
-### SECTION 10: SELinux
-
----
-
-**Task 33 — SELinux Modes and Contexts** *(both nodes)*
-
-> Objective: Set enforcing/permissive modes, list/identify SELinux file and process context
-
-1. On `alpha`: Confirm SELinux is in `enforcing` mode — set it persistently if not
-2. On `bravo`: Set SELinux to `permissive` mode persistently (edit `/etc/selinux/config`)
-3. On `alpha`:
-   - Create `/webtest/index.html` with content `"Hello RHCSA"`
-   - Check the SELinux context — it will be wrong for serving with httpd
-   - Use `semanage fcontext` to add the correct `httpd_sys_content_t` context for `/webtest(/.*)?`
-   - Apply the context with `restorecon -Rv /webtest`
-   - Start httpd and verify the page is served
+In cron's day-of-week field, `0` (and `7`) is Sunday, so `1-6` is Monday through Saturday.
 
 ---
 
-**Task 34 — SELinux Ports and Booleans** *(alpha)*
+### Section 10 — SELinux
 
-> Objective: Manage SELinux port labels, Use boolean settings to modify SELinux settings, Restore default file contexts
-
-1. Configure `httpd` to listen on port `8181`
-   - Add the non-standard port to the SELinux policy for `http_port_t`
-   - Confirm with `semanage port -l | grep http`
-2. Check the current state of the boolean `httpd_can_network_connect`
-3. Enable the boolean persistently
-4. Check the boolean `httpd_enable_homedirs` and enable it persistently
-5. Copy `/etc/hosts` to `/var/www/html/hosts.txt` — check and restore the SELinux context
+**T34 — SELinux ports and booleans**
 
 ```bash
 semanage port -a -t http_port_t -p tcp 8181
@@ -1480,25 +1809,9 @@ restorecon -v /var/www/html/hosts.txt
 
 ---
 
-### SECTION 11: Containers with Podman
+### Section 11 — Containers
 
----
-
-**Task 35 — Deploy a Container as a Systemd Service (Quadlet)** *(alpha, as alice)*
-
-> Objective: Find/retrieve container images, Inspect images, Run containers, Configure container as systemd service, Attach persistent storage
-
-As user `alice` (rootless container):
-
-1. Search for and pull the `ubi10/httpd-24` image from `registry.access.redhat.com`
-2. Inspect the image and identify the exposed port
-3. Create a directory `~/web_content/` and add a file `index.html` with content: `"Welcome to Alice's Containerized Web Server!"`
-4. Run the container named `alice_web` in detached mode:
-   - Map local port `8080` to container port `8080`
-   - Bind-mount `~/web_content/` to `/var/www/html/` with `:Z` for SELinux
-5. Verify the container is running with `podman ps`
-6. Test with `curl http://localhost:8080`
-7. Create a **Podman Quadlet** to run the container as a user systemd service that starts at login:
+**T35 — Quadlet**
 
 ```ini
 # ~/.config/containers/systemd/alice-web.container
@@ -1519,61 +1832,11 @@ Restart=always
 WantedBy=default.target
 ```
 
-8. Enable user lingering for `alice`: `loginctl enable-linger alice`
-9. Reload the user daemon and start the service:
-   ```bash
-   systemctl --user daemon-reload
-   systemctl --user enable --now alice-web.service
-   ```
-10. Reboot and confirm the container starts automatically and the webpage is accessible
-
----
-
-## 📊 Grading Checklist
-
-Mark each task after verifying it survives a reboot where applicable.
-
-| #  | Task                                      | Reboot Test | Done |
-| -- | ----------------------------------------- | ----------- | ---- |
-| 1  | Break into bravo, reset root password     | ✓          | [ ]  |
-| 2  | Set default boot target to multi-user     | ✓          | [ ]  |
-| 3  | Modify bootloader (GRUB_TIMEOUT, quiet)   | ✓          | [ ]  |
-| 4  | Static IP + IPv6 + hostname + /etc/hosts  | ✓          | [ ]  |
-| 5  | Firewall rules (SSH, HTTP, ports)         | ✓          | [ ]  |
-| 6  | Create users/groups with UIDs/GIDs        | ✓          | [ ]  |
-| 7  | Password aging policies                   | ✓          | [ ]  |
-| 8  | sudo access (groups, command alias)       | ✓          | [ ]  |
-| 9  | Set-GID collaborative directory           | ✓          | [ ]  |
-| 10 | System-wide umask 0007                    | ✓          | [ ]  |
-| 11 | Key-based SSH (root + alice)              | ✓          | [ ]  |
-| 12 | scp, rsync, sftp transfers                | —          | [ ]  |
-| 13 | Configure local DNF repo from ISO         | ✓          | [ ]  |
-| 14 | Package install/remove/query with RPM+DNF | —          | [ ]  |
-| 15 | DNF module stream management              | —          | [ ]  |
-| 16 | GPT partitions on /dev/vdb                | ✓          | [ ]  |
-| 17 | Format + mount by UUID and LABEL          | ✓          | [ ]  |
-| 18 | Swap partition with priority              | ✓          | [ ]  |
-| 19 | Create LVM (PV, VG, LV) with PE size      | ✓          | [ ]  |
-| 20 | Extend LV and grow filesystem live        | ✓          | [ ]  |
-| 21 | NFS server with exports + firewall        | ✓          | [ ]  |
-| 22 | NFS client persistent mount               | ✓          | [ ]  |
-| 23 | AutoFS (direct map + indirect home dirs)  | ✓          | [ ]  |
-| 24 | File permission diagnostics + fix         | ✓          | [ ]  |
-| 25 | Chrony NTP + timezone                     | ✓          | [ ]  |
-| 26 | Tuned profile + custom merged profile     | ✓          | [ ]  |
-| 27 | Process management (nice/renice/kill)     | —          | [ ]  |
-| 28 | Persistent journal + rsyslog rule         | ✓          | [ ]  |
-| 29 | at + cron + systemd timer                 | ✓          | [ ]  |
-| 30 | Conditional shell script (syscheck.sh)    | —          | [ ]  |
-| 31 | Looping user creation script              | —          | [ ]  |
-| 32 | Backup script + cron job                  | ✓          | [ ]  |
-| 33 | SELinux modes + fcontext + restorecon     | ✓          | [ ]  |
-| 34 | SELinux ports + booleans                  | ✓          | [ ]  |
-| 35 | Podman container + Quadlet service        | ✓          | [ ]  |
-
-**Score: ___ / 35**
-
-> Passing threshold (real exam ~70%): **25 / 35**
+```bash
+loginctl enable-linger alice
+systemctl --user daemon-reload
+systemctl --user enable --now alice-web.service
+```
 
 ---
 
@@ -1582,11 +1845,11 @@ Mark each task after verifying it survives a reboot where applicable.
 ### Storage
 
 ```bash
-lsblk / fdisk / gdisk / parted
+lsblk / fdisk / parted / sfdisk -d   # fdisk handles GPT natively; gdisk is a separate package
 pvcreate / vgcreate / lvcreate / lvextend -r
 mkfs.xfs / mkfs.ext4 / mkfs.vfat / mkswap
 blkid / findfs LABEL=xxx
-mount -a  # test fstab
+mount -a  # test fstab BEFORE you reboot
 ```
 
 ### SELinux
@@ -1638,9 +1901,9 @@ Based on your current objective tracker, focus on:
 | 🟡 Medium | NFS + AutoFS                           | `man exports`, `man auto.master`                                                       |
 | 🟡 Medium | Containers (Quadlets)                  | [Podman Quadlet Docs](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) |
 | 🟢 Lower  | Networking/firewalld                   | `man nmcli`, `man firewall-cmd`                                                        |
-|           |                                        |                                                                                            |
 
 ---
 
 *Practice exam created 2026-05-12 based on RHEL 10 EX200 objectives*
 *Sources: Red Hat EX200 objectives page, aggressiveHiker/rhcsa9, soficx/rhcsa*
+*Restructured 2026-09-09: inline solutions moved to the answer key at the end so the exam can be re-run cold.*
