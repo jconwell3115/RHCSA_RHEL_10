@@ -85,9 +85,9 @@ sudo virt-customize -d rhel10-echo    --hostname rhel10-echo
 sudo virt-customize -d rhel10-foxtrot --hostname rhel10-foxtrot
 
 # Extra disks (virtio bus → they appear as /dev/vdX inside the guest)
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-echo    vdb 8
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-echo    vdc 6
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-foxtrot vdb 8
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-echo    vdb 8
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-echo    vdc 6
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-foxtrot vdb 8
 
 # DVD ISO to echo (Task 17 repo work)
 sudo virsh change-media rhel10-echo sda \
