@@ -2,7 +2,6 @@
 title: RHCSA Practice Exam - Environment Setup & Usage Guide
 tags: [certifications, rhcsa, rhel10, lab, kvm, libvirt, practice, setup]
 created: 2026-07-08
-updated: 2026-09-22
 covers: [RHCSA Practice Exam 1, RHCSA Practice Exam 2, RHCSA Practice Exam 3]
 note: Golden image build lives here; RHCA lab guide references it downstream.
 ---
@@ -378,10 +377,18 @@ sudo virsh net-list --all
 
 ## 🔧 PHASE 2 — Helper Script: Attach Extra Disks
 
-All three exams need multiple raw disks attached unpartitioned. Save as `~/my_work_tools/bin/bash/add-disk.sh`:
+All three exams need multiple raw disks attached unpartitioned. The helper ships with this repo in the `RHCSA-Lab-Scripts/` folder next to this note (`add-disk.sh`, along with `rebuild-rhcsa-labs.sh`, `rhel10-dvd-download.sh` and the `exN-verify.sh` graders). Point `RHCSA_SCRIPTS` at that folder once per shell — every phase below calls the script through it, so it works wherever you cloned the repo:
 
 ```bash
-#!usr/bin/env bash
+# adjust to wherever you cloned the repo
+export RHCSA_SCRIPTS="$HOME/Repositories/obsidian_vault/Shared_Vault/Obsidian_Vault/Certifications/RHCSA-Lab-Scripts"
+chmod +x "$RHCSA_SCRIPTS"/*.sh
+```
+
+For reference, `add-disk.sh` contains:
+
+```bash
+#!/usr/bin/env bash
 set -euo pipefail
 VM="${1:?usage: add-disk.sh <vm> <target-dev> <size-GB>}"
 DEV="${2:?e.g. sdb}"
@@ -393,10 +400,6 @@ sudo qemu-img create -f qcow2 "${IMG}" "${SIZE}G"
 sudo virsh attach-disk "${VM}" "${IMG}" "${DEV}" \
   --persistent --subdriver qcow2 --targetbus virtio
 echo "Attached. Inside the VM it appears as /dev/${DEV}."
-```
-
-```bash
-sudo chmod +x ~/my_work_tools/bin/bash/add-disk.sh
 ```
 
 ---
@@ -430,6 +433,8 @@ Headless download uses the Red Hat API, so grab a token from a browser on your *
 > The token never expires as long as it's used at least once every 30 days. Treat it like a password — never commit it in plaintext to this shared note.
 
 ### 2.5.3 — Download the DVD ISO via CLI (on the KVM host)
+
+> The same steps are packaged as `RHCSA-Lab-Scripts/rhel10-dvd-download.sh` (its `offline_token` is a scrambled placeholder — use your own, ideally via the `RH_OFFLINE_TOKEN` env var the script reads).
 
 ```bash
 sudo dnf install -y jq curl
@@ -510,9 +515,9 @@ sudo virt-customize -d rhel10-bravo --hostname rhel10-bravo
 ### 3.4 — Attach extra disks
 
 ```bash
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-alpha vdb 10
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo vdb 10
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo vdc 5
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-alpha vdb 10
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-bravo vdb 10
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-bravo vdc 5
 ```
 
 > Storage tasks (16–20) target bravo `/dev/vdb` and `/dev/vdc`. Alpha's extra disk is optional. Leave all disks unpartitioned.
@@ -593,10 +598,10 @@ sudo virt-customize -d rhel10-delta   --hostname rhel10-delta
 ### 4.4 — Attach extra disks
 
 ```bash
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdb 8
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdc 6
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdd 4
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-delta   sdb 8
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-charlie sdb 8
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-charlie sdc 6
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-charlie sdd 4
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-delta   sdb 8
 ```
 
 ### 4.5 — Seed the break-in condition on charlie
@@ -685,9 +690,9 @@ sudo virt-customize -d rhel10-foxtrot --hostname rhel10-foxtrot
 ### 5.4 — Attach extra disks
 
 ```bash
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-echo    vdb 8
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-echo    vdc 6
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-foxtrot vdb 8
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-echo    vdb 8
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-echo    vdc 6
+sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-foxtrot vdb 8
 ```
 
 > Unlike Exams 1–2, Exam 3 tasks reference `/dev/vdX` (Task 20's `fdisk` work, Task 21's LVM shrink, Task 22's swap replacement, Task 23–24's mounts) — `add-disk.sh` already attaches with `--targetbus virtio`, so this is automatic.
@@ -995,6 +1000,8 @@ sudo virt-clone --original rhel10-golden --name rhel10-foxtrot \
 
 For rebuilding everything from scratch after a golden-image update:
 
+> Also shipped as `RHCSA-Lab-Scripts/rebuild-rhcsa-labs.sh` (it locates `add-disk.sh` beside itself, so no `RHCSA_SCRIPTS` needed).
+
 > **Exam 3 caveat:** unlike Exam 1/2's pre-conditions (root password scrambles, `rescue.target`), which are set offline via `virt-customize --root-password`/`--run-command` with no boot required, Exam 3's seeding (Phase 5.5) writes multi-line unit files and runs `dnf install` interactively inside a booted VM. That part isn't folded into this script — it stops after building/networking/disking echo and foxtrot, and calls out the manual step before their own start + snapshot.
 
 ```bash
@@ -1003,6 +1010,7 @@ For rebuilding everything from scratch after a golden-image update:
 set -euo pipefail
 
 POOL=/home/libvirt/images
+ADDDISK="$(dirname "$(readlink -f "$0")")/add-disk.sh"   # sibling script, wherever the repo is cloned
 
 teardown() {
   for vm in "$@"; do
@@ -1043,16 +1051,16 @@ sudo virt-customize -d rhel10-echo    --hostname rhel10-echo
 sudo virt-customize -d rhel10-foxtrot --hostname rhel10-foxtrot
 
 echo "== Disks =="
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-alpha   sdb 10
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo   sdb 10
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-bravo   sdc 5
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdb 8
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdc 6
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-charlie sdd 4
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-delta   sdb 8
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-echo    vdb 8
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-echo    vdc 6
-sudo ~/my_work_tools/bin/bash/add-disk.sh rhel10-foxtrot vdb 8
+sudo "${ADDDISK}" rhel10-alpha   sdb 10
+sudo "${ADDDISK}" rhel10-bravo   sdb 10
+sudo "${ADDDISK}" rhel10-bravo   sdc 5
+sudo "${ADDDISK}" rhel10-charlie sdb 8
+sudo "${ADDDISK}" rhel10-charlie sdc 6
+sudo "${ADDDISK}" rhel10-charlie sdd 4
+sudo "${ADDDISK}" rhel10-delta   sdb 8
+sudo "${ADDDISK}" rhel10-echo    vdb 8
+sudo "${ADDDISK}" rhel10-echo    vdc 6
+sudo "${ADDDISK}" rhel10-foxtrot vdb 8
 
 echo "== Attaching DVD ISO for Task 13/17 repo work (alpha + charlie + echo) =="
 for vm in rhel10-alpha rhel10-charlie; do
@@ -1224,23 +1232,23 @@ sudo virsh define /home/libvirt/backups/<vm>.xml            # re-register a doma
 
 Per `[[RHCA-Ansible-Cert-Path-Timeline]]`:
 
-- RHCSA (EX200) is the prerequisite
+- RHCSA (EX200) is the prerequisite, targeted mid-September 2026.
 - Use Exam 1 first (foundational methods: rd.break, fdisk, simple LVM).
 - Use Exam 2 second (advanced variants: init=/bin/bash, parted, striped LVM, ACLs, rich rules).
 - Use Exam 3 third — a gap-fill paper covering the ~26 of 35 EX200 objectives Exams 1–2 never touched (I/O redirection, grep/regex, tar, unaided SELinux/service diagnosis, `grubby`, LV shrink, bind mounts, `/etc/cron.d`, and more). Expect a low first score (15–20/35) — that's the diagnostic working, not a failure.
 - Aim to pass all three practice exams at 25–30/35 or better before booking the real EX200.
 - The `rhel10-golden` image built in Phase 0 is reused by the RHCA lab — the RHCA guide references it rather than rebuilding.
 
-### Recommended drill cadence
+### Recommended drill cadence (pre-September)
 
 | Week        | Activity                                                 |
 | ----------- | -------------------------------------------------------- |
-| Week 1 | Full timed run of Exam 1; self-grade; note weak sections |
-| Week 2 | Revert; redo only failed tasks; full re-run              |
-| Week 3 | Full timed run of Exam 2 (harder variants)               |
-| Week 4 | Revert; redo failed tasks; mixed drill of both           |
-| Week 5 | Both exams back-to-back at 30/35+; book real EX200       |
-| Week 6 | Light review; take real EX200                            |
+| Aug, week 1 | Full timed run of Exam 1; self-grade; note weak sections |
+| Aug, week 2 | Revert; redo only failed tasks; full re-run              |
+| Aug, week 3 | Full timed run of Exam 2 (harder variants)               |
+| Aug, week 4 | Revert; redo failed tasks; mixed drill of both           |
+| Sep, week 1 | Both exams back-to-back at 30/35+; book real EX200       |
+| Sep, week 2 | Light review; take real EX200                            |
 
 ---
 
