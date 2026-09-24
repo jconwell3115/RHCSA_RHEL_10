@@ -1,0 +1,34 @@
+# Lint/tool output (pre-commit writes these to logs/)
+logs/
+*.log
+
+# Python environments and tool caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.ruff_cache/
+.mypy_cache/
+.pytest_cache/
+.cache/
+
+# Lab artifacts: VM images, ISOs, and generated libvirt XML
+*.iso
+*.qcow2
+*.img
+*.ks.bak
+
+# Secrets — the DVD download script reads RH_OFFLINE_TOKEN; never commit a real one
+.env
+*.token
+*offline_token*
+
+# Local tool/editor/OS state
+.claude/
+.github/copilot-instructions.md
+.pre-commit-config.yaml
+.vscode/
+.idea/
+*.swp
+*~
+.DS_Store

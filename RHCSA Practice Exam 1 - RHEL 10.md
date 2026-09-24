@@ -1,3 +1,5 @@
+s
+
 ---
 title: RHCSA Practice Exam - RHEL 10
 tags: [certifications, rhcsa, rhel10, practice, linux]
@@ -787,10 +789,10 @@ systemctl set-default multi-user.target
 **T3 — Bootloader**
 
 ```
-vim /etc/default/grub
-grub2-mkconfig -o /boot/grub2/grub.cfg   # BIOS
+sudo vim /etc/default/grub
+sudo grub2-mkconfig -o /boot/grub2/grub.cfg   # BIOS
 # OR
-grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg  # UEFI
+sudo grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg  # UEFI
 ```
 
 ---

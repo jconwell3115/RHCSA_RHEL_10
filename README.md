@@ -847,49 +847,121 @@ Wait for both to return, then verify each persistence-marked task.
 
 ### Self-grading workflow
 
-1. Walk the Grading Checklist table in each exam file.
-2. Mark a task done only if it persisted through reboot where applicable.
-3. Tally the score. Pass is 25/35.
-4. Log the result in your weekly review note.
+1. Reboot both VMs (see above) and wait for them to come back.
+2. Run the exam's `exN-verify.sh` on **each** VM (next section) and note the PASS/FAIL counts.
+3. Walk the Grading Checklist table in the exam file for the tasks the script does not cover — it is a persistence spot-check, not a full 35-task grader.
+4. Mark a task done only if it persisted through reboot where applicable.
+5. Tally the score. Pass is 25/35.
+6. Log the result in your weekly review note.
 
-### Optional automated grader
+### Automated grader — `exN-verify.sh`
 
-You have the Ansible skills to auto-verify. Example task patterns:
+`RHCSA-Lab-Scripts/` ships one verifier per exam: `ex1-verify.sh`, `ex2-verify.sh`, `ex3-verify.sh`. Each script prints `PASS`/`FAIL` per check and a summary line (`== N passed, M failed ==`). It reads `hostname -s` and runs only the block for the host it is on (`*alpha*`/`*bravo*`, `*charlie*`/`*delta*`, `*echo*`/`*foxtrot*`), so **copy the same script to both VMs of the exam** and run it on each.
 
-```yaml
----
-- name: RHCSA Exam 1 - Automated Grader
-  hosts: all
-  gather_facts: true
-  tasks:
+| Exam | Script          | Copy to (VM → IP after the network task)                 |
+| ---- | --------------- | -------------------------------------------------------- |
+| 1    | `ex1-verify.sh` | `rhel10-alpha` → `192.168.100.10`, `rhel10-bravo` → `192.168.100.20` |
+| 2    | `ex2-verify.sh` | `rhel10-charlie` → `10.20.30.11`, `rhel10-delta` → `10.20.30.12`     |
+| 3    | `ex3-verify.sh` | `rhel10-echo` → `172.16.40.21`, `rhel10-foxtrot` → `172.16.40.22`    |
 
-    - name: "Task 2 - default target is multi-user (bravo)"
-      ansible.builtin.command: systemctl get-default
-      register: t2
-      changed_when: false
-      failed_when: false
-      when: inventory_hostname == 'bravo'
+#### 1. Find each VM's IP
 
-    - name: "Task 6 - user alice exists with UID 1050 (alpha)"
-      ansible.builtin.getent:
-        database: passwd
-        key: alice
-      when: inventory_hostname == 'alpha'
+The static addresses in the table above **only exist after you complete the exam's network task** (Task 4). Until then each VM holds a DHCP lease from `.100–.199`, so scp to that address instead. Both `virsh` commands below return nothing if the VM is shut off, so confirm with `sudo virsh list --all` first. After the network task, use the table (each host bridge is `.1` on the exam subnet, so the VMs are directly reachable):
 
-    - name: "Task 17 - /mnt/xfs_data mounted (bravo)"
-      ansible.builtin.command: findmnt /mnt/xfs_data
-      register: t17
-      changed_when: false
-      failed_when: false
-      when: inventory_hostname == 'bravo'
-
-    - name: "Task 33 - SELinux enforcing (alpha)"
-      ansible.builtin.command: getenforce
-      register: t33
-      changed_when: false
-      failed_when: "'Enforcing' not in t33.stdout"
-      when: inventory_hostname == 'alpha'
+```bash
+sudo virsh domifaddr rhel10-alpha                      # DHCP lease / ARP view
+sudo virsh domifaddr rhel10-alpha --source agent       # also works with static IPs (needs qemu-guest-agent)
 ```
+
+**Optional — pin a predictable DHCP address (pre-Task 4).** Reserve an IP for each VM's MAC in the libvirt network so you always know where to scp, without hunting for a lease. Pick addresses outside the exam's static targets (`.10`/`.20`) so the reservation never collides with the answer:
+
+```bash
+sudo virsh domiflist rhel10-alpha                      # note the MAC in the last column
+sudo virsh net-update rhcsa-net1 add ip-dhcp-host \
+  "<host mac='52:54:00:AA:BB:CC' name='alpha' ip='192.168.100.110'/>" --live --config
+# repeat for bravo, e.g. ip='192.168.100.120' with bravo's MAC
+```
+
+Then make the VM renew its lease (reboot it, or inside the VM run `sudo nmcli device reapply <iface>` or `sudo nmcli con up "<connection-name>"`). Use `rhcsa-net2` / `rhcsa-net3` for Exams 2 and 3. The reservation lives in the network definition, so it survives `snapshot-revert`, but a fresh `virt-clone` rebuild gets new MACs and needs it re-added. Remove one with the same command using `delete` instead of `add`.
+
+#### 2. SCP the script from the host into the VMs
+
+Run this **on the KVM host**, from any directory. `RHCSA_SCRIPTS` is the variable you exported in Phase 2; the `student` account from the golden image is the login user.
+
+```bash
+# Exam 1 — copy to alpha and bravo
+for ip in 192.168.100.10 192.168.100.20; do
+  scp "$RHCSA_SCRIPTS/ex1-verify.sh" student@"$ip":~/
+done
+```
+
+Exams 2 and 3, one VM at a time:
+
+```bash
+scp "$RHCSA_SCRIPTS/ex2-verify.sh" student@10.20.30.11:~/     # charlie
+scp "$RHCSA_SCRIPTS/ex2-verify.sh" student@10.20.30.12:~/     # delta
+scp "$RHCSA_SCRIPTS/ex3-verify.sh" student@172.16.40.21:~/    # echo
+scp "$RHCSA_SCRIPTS/ex3-verify.sh" student@172.16.40.22:~/    # foxtrot
+```
+
+Tips:
+
+- Accept the host key on first connect, or add `-o StrictHostKeyChecking=accept-new`. The VMs share golden-image host keys but change IP after the network task, so `known_hosts` prompts are normal. Add `-o UserKnownHostsFile=/dev/null` if you would rather not keep the entries.
+- The `student` password is set in the kickstart/golden build. Run `ssh-copy-id student@<ip>` once per VM to skip it. After a snapshot revert the key is gone with the disk state — re-copy it, or copy the script fresh each time.
+- The destination `~/` is `/home/student`. Copying to `/root` needs root SSH, which the exams may lock down — stay with `student`.
+
+#### 3. Run it inside each VM
+
+The checks read root-only state (`lvs`, `semanage`, `firewall-cmd`, `visudo`, other users' crontabs), so run as root. The file was copied without the execute bit, so call it through `bash`:
+
+```bash
+# from the host, without opening an interactive login
+ssh -t student@192.168.100.10 'sudo bash ~/ex1-verify.sh'    # alpha
+ssh -t student@192.168.100.20 'sudo bash ~/ex1-verify.sh'    # bravo
+```
+
+Or log in and run it there:
+
+```bash
+ssh student@192.168.100.10
+sudo bash ~/ex1-verify.sh
+```
+
+Grade both VMs in one pass, keeping a log:
+
+```bash
+EXAM=1; IPS=(192.168.100.10 192.168.100.20)      # Exam 2: 10.20.30.11 10.20.30.12 — Exam 3: 172.16.40.21 172.16.40.22
+for ip in "${IPS[@]}"; do
+  scp -q "$RHCSA_SCRIPTS/ex${EXAM}-verify.sh" student@"$ip":~/
+  ssh -t student@"$ip" "sudo bash ~/ex${EXAM}-verify.sh"
+done | tee "$HOME/rhcsa-ex${EXAM}-$(date +%F_%H%M).log"
+```
+
+Expected output per host:
+
+```text
+== Host: alpha ==
+  PASS  T3  GRUB_TIMEOUT=10
+  FAIL  T4  static IPv4 .10
+  ...
+== 31 passed, 4 failed ==
+```
+
+Grading is a snapshot of the exam state, so do not fix anything yet. Record the failures against the task numbers, then use the exam's answer key.
+
+#### When SSH is not available
+
+The verifiers only work over the network, so some hosts need a workaround during or right after the exam:
+
+| Situation                                                         | What to do                                                                                                                                                                |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exam 2 **delta** — Task 11 sets `AllowUsers root emma frank`       | `student` can no longer log in. Copy the script to delta **before** the sshd task (grading spoilers aside), or read the checks from `RHCSA-Lab-Scripts/ex2-verify.sh` and run them by hand via `virsh console`. |
+| Exam 2 **delta** boots to `rescue.target` (pre-condition)          | sshd is not running until Task 2 is done — scp only after the target is fixed.                                                                                             |
+| Exam 3 **foxtrot** — broken `fstab` / scrambled root (Task 1)      | No sshd until Task 1 is fixed. Grade via the console, or after the repair.                                                                                                  |
+| Static IP task done wrongly (bad address/gateway)                  | The VM is unreachable on its expected IP. Use `sudo virsh console <vm>` and fix networking first — that check will show `FAIL` anyway.                                     |
+| The VM was never renamed (Task 4 skipped)                          | The script matches on `hostname -s`; with `rhel10-alpha` it still matches `*alpha*`, so it works — the `T4 hostname` check will simply fail.                               |
+
+> The exam files also embed the same script under their Grading Checklist, if you would rather paste it into a `virsh console` session than copy it over SSH.
 
 ---
 
