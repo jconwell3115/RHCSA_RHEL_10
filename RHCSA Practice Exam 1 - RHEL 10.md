@@ -1,12 +1,16 @@
+ manual
+
 s
 
 ---
+
 title: RHCSA Practice Exam - RHEL 10
 tags: [certifications, rhcsa, rhel10, practice, linux]
 created: 2026-05-12
 restructured: 2026-09-09 - answer key moved to bottom for cold re-runs
 note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading Checklist during a timed run.
----
+------------------------------------------------------------------------------------------------------------
+
 # 🧪 RHCSA Practice Exam — RHEL 10 (EX200)
 
 > **Format:** Performance-based | **Time budget:** 3 hours | **Pass Score:** ~70% (25 / 35)
@@ -801,31 +805,74 @@ sudo grub2-mkconfig -o /boot/efi/EFI/redhat/grub.cfg  # UEFI
 
 **T4 — Static IP and hostname**
 
+Run on **alpha**. On **bravo**, use `192.168.100.20`, `fd00::20` and `bravo.lab.local`.
+
 ```bash
-nmcli con show # get interface name
-sudo nmcli con add type ethernet ifname "interface-name" con-name "connection-name"
-nmcli con mod "connection-name" ipv4.addresses 192.168.100.10/24 ipv4.gateway 192.168.100.1 ipv4.method manual
-nmcli con mod "connection-name" ipv4.dns "8.8.8.8 1.1.1.1"
-nmcli con mod "connection-name" ipv6.addresses fd00::10/64 ipv6.method manual
-nmcli con up "connection-name"
-hostnamectl set-hostname alpha.lab.local
+nmcli con show   # note the existing connection NAME (e.g. ens160 or "Wired connection 1")
+
+# Modify the existing connection instead of adding a new one (avoids duplicate profiles)
+sudo nmcli con mod "ens160" ipv4.addresses 192.168.100.10/24 ipv4.gateway 192.168.100.1 ipv4.dns "8.8.8.8 1.1.1.1" ipv4.method manual
+sudo nmcli con mod "ens160" ipv6.addresses fd00::10/64 ipv6.method manual
+sudo nmcli con up "ens160"
+
+sudo hostnamectl set-hostname alpha.lab.local
+
+# Hostname resolution (run on BOTH hosts)
+sudo tee -a /etc/hosts <<'EOF'
+192.168.100.10 alpha.lab.local alpha
+192.168.100.20 bravo.lab.local bravo
+fd00::10 alpha.lab.local alpha
+fd00::20 bravo.lab.local bravo
+EOF
+
+# Verify
+ip addr show ens160
+nmcli -g ipv4.dns con show "ens160"
+ping -c2 bravo.lab.local
 ```
+
+> `ens160` is a placeholder. Use the exact name shown by `nmcli con show`, with quotes if it contains spaces. The connection name is only a label. It does not need to match anything in the task.
 
 **T5 — Firewall**
 
 ```bash
-firewall-cmd --permanent --add-service=ssh
-firewall-cmd --permanent --add-service=http
-firewall-cmd --add-port=8080/tcp
+firewall-cmd --get-default-zone   # usually public; use --zone=public anyway to be explicit
+firewall-cmd --permanent --zone=public --add-service=ssh
+firewall-cmd --permanent --zone=public --add-service=http
+firewall-cmd --zone=public --add-port=8080/tcp   # runtime only (no --permanent), lost on reload
 firewall-cmd --permanent --zone=internal --add-port=5900-5910/tcp
 firewall-cmd --reload
-firewall-cmd --list-all
+firewall-cmd --zone=public --list-all
 firewall-cmd --zone=internal --list-all
 ```
 
 ---
 
 ### Section 3 — Users, Groups & Permissions
+
+**T6 — Create users and groups**
+
+```bash
+# Groups (create first so useradd can reference them)
+sudo groupadd -g 5000 sysadmins
+sudo groupadd -g 5001 developers
+sudo groupadd -g 5002 contractors
+
+# Users: -g = primary group, -G = supplementary group(s)
+sudo useradd -u 1050 -g developers  -G sysadmins   alice
+sudo useradd -u 1051 -g developers  -G contractors -s /bin/bash bob
+sudo useradd -u 1052 -g contractors -s /sbin/nologin carol
+sudo useradd -u 1053 -g sysadmins   -e "$(date -d '+90 days' +%F)" dave
+
+# Verify
+id alice; id bob; id carol; id dave
+getent passwd alice bob carol dave
+sudo chage -l dave | grep 'Account expires'
+```
+
+- `-g` sets the primary group and `-G` adds supplementary groups. They are easy to swap by accident.
+- `-e` takes a date in `YYYY-MM-DD` format, so `date -d '+90 days' +%F` produces it.
+- `carol` has no login shell, so use `/sbin/nologin`.
 
 **T7 — Password aging**
 
@@ -836,28 +883,172 @@ sudo passwd bob -n 5 -x 90 -w 14 -i 10
 sudo chage carol -d 0
 ```
 
-Then set `PASS_MIN_LEN 8` in `/etc/login.defs`.
+Then set `PASS_MIN_LEN 8` in `/etc/login.defs`. Edit the existing line in `vim` (a heredoc or `tee -a` would add a duplicate):
+
+```bash
+sudo vim /etc/login.defs      # find PASS_MIN_LEN (/PASS_MIN_LEN), set it to 8, uncomment if needed
+grep '^PASS_MIN_LEN' /etc/login.defs   # verify: one active line
+```
+
+**T8 — Configure sudo access**
+
+```bash
+sudo visudo -f /etc/sudoers.d/lab     # opens in vim and checks syntax on save
+```
+
+Contents (define the alias before it is used):
+
+```
+Cmnd_Alias PKGMGMT = /usr/bin/dnf
+
+%sysadmins  ALL=(ALL) NOPASSWD: ALL
+%developers ALL=(ALL) PKGMGMT, /usr/bin/systemctl
+alice       ALL=(ALL) /usr/sbin/useradd, /usr/sbin/userdel
+```
+
+```bash
+sudo chmod 0440 /etc/sudoers.d/lab   # drop-ins must be 0440 or visudo -c warns "bad permissions"
+sudo visudo -c              # verify syntax
+sudo -l -U alice            # verify
+```
+
+- `%` marks a group, so `%sysadmins` is a group and `alice` is a user.
+- `alice` is in both `developers` and `sysadmins`, so `sudo -l -U alice` will also show `NOPASSWD: ALL` from the group rule. That is expected here, and the alice-only rule still matches the task wording.
+- `visudo -f` is better than a heredoc because it refuses to save a file with a syntax error.
 
 **T9 — Set-GID collaborative directory**
 
 ```bash
-mkdir -p /data/devshare
-chown alice:developers /data/devshare
-chmod 3770 /data/devshare
+sudo mkdir -p /data/devshare
+sudo chown alice:developers /data/devshare
+sudo chmod 3770 /data/devshare
 ```
 
 Mode `3770` = SGID (2000) + sticky (1000) + `rwxrwx---`.
 
-**T10 — Umask**
+Verify:
 
 ```bash
-# In /etc/profile.d/umask.sh
-umask 0007
+ls -ld /data/devshare
+# drwxrws--T. 2 alice developers ... /data/devshare
+stat -c '%A %a %U:%G' /data/devshare
+# drwxrws--T 3770 alice:developers
+
+# Create a test file as bob and check the group
+sudo -u bob touch /data/devshare/bobfile
+ls -l /data/devshare/bobfile
+# -rw-r--r--. 1 bob developers ... bobfile    (group = developers)
+
+# Other users are locked out
+sudo -u carol ls /data/devshare
+# ls: cannot open directory ... Permission denied
+```
+
+- In the `ls -ld` output, the `s` in the group position is set-GID (the group `x` is also set). The capital `T` at the end is the sticky bit, and it's capital because "other" has no `x`.
+- bob's primary group is already `developers`, so his test file gets that group even without SGID. To prove SGID is working, create a file as a user whose primary group is different, for example carol after temporarily adding her to `developers`. That file should still end up group `developers`.
+
+**T10 — Umask**
+
+Run on **both** alpha and bravo. `sudo -u bob bash -lc '...'` runs commands in a login shell as bob (the `-l` is what reads `/etc/profile.d/`). Plain `sudo -iu bob 'a; b'` fails because `-i` escapes the `;`.
+
+**Before:**
+
+```bash
+sudo -u bob bash -lc umask
+# 0022   (0002 if the user's group has the same name as the user)
+sudo -u bob bash -lc 'touch ~/t1; mkdir ~/d1; ls -ld ~/t1 ~/d1'
+# -rw-r--r--. ... t1     (644)
+# drwxr-xr-x. ... d1     (755)
+```
+
+**Change:**
+
+```bash
+echo 'umask 0007' | sudo tee /etc/profile.d/umask.sh
 ```
 
 `umask 007` → files `666-007 = 660`, directories `777-007 = 770`.
 
+**After** (use a login shell, because your current shell keeps the old umask):
+
+```bash
+sudo -u bob bash -lc umask
+# 0007
+sudo -u bob bash -lc 'touch ~/t2; mkdir ~/d2; ls -ld ~/t2 ~/d2'
+# -rw-rw----. ... t2     (660)
+# drwxrwx---. ... d2     (770)
+sudo -u bob bash -lc 'rm -rf ~/t1 ~/t2 ~/d1 ~/d2'   # clean up
+```
+
+- Files in `/etc/profile.d/` must end in `.sh`, or they won't be read.
+- `t1` and `d1` keep their old permissions, because a umask only affects files created after it's set.
+
 ---
+
+### Section 4 — SSH & Remote Access
+
+**T11 — Key-based SSH**
+
+First, on **bravo**: prepare sshd and the `alice` account.
+
+```bash
+sudo vim /etc/ssh/sshd_config     # PermitRootLogin yes, PasswordAuthentication yes
+sudo systemctl restart sshd
+sudo sshd -T | grep -E 'permitrootlogin|passwordauthentication'   # effective values
+
+sudo useradd alice                # skip if alice already exists on bravo
+sudo passwd alice
+```
+
+If `sshd -T` doesn't show `yes`, a file in `/etc/ssh/sshd_config.d/` is overriding the main file. Fix the setting there.
+
+On **alpha** as `root`:
+
+```bash
+ssh-keygen -t rsa -b 4096 -N "" -f ~/.ssh/id_rsa
+ssh-copy-id root@bravo
+ssh root@bravo hostname           # should print bravo without asking for a password
+```
+
+On **alpha** as `alice`:
+
+```bash
+sudo -iu alice
+ssh-keygen -t ed25519 -N "" -f ~/.ssh/id_ed25519
+ssh-copy-id alice@bravo
+ssh alice@bravo hostname          # passwordless
+exit
+```
+
+- `-N ""` means no passphrase. `-f` sets the key file path so `ssh-keygen` doesn't prompt.
+- `ssh-copy-id` uses the password login once to install the public key into `~/.ssh/authorized_keys` on bravo. That's why `PasswordAuthentication yes` must be set first.
+- The copy-id step tries `bravo` by name, so the `/etc/hosts` entry from T4 has to be in place.
+
+**T12 — Secure file transfer**
+
+Run on **alpha** as `root` (the key from T11 makes these passwordless):
+
+```bash
+scp /etc/hosts root@bravo:/tmp/hosts_from_alpha
+
+sudo dnf install -y rsync                       # needed on both nodes, if missing
+rsync -av /etc/sysconfig/ root@bravo:/tmp/sysconfig_backup/
+
+sftp root@bravo
+sftp> put /etc/motd /tmp/
+sftp> bye
+```
+
+Verify:
+
+```bash
+ssh root@bravo 'ls -l /tmp/hosts_from_alpha /tmp/motd; ls /tmp/sysconfig_backup | head'
+ssh root@bravo cat /tmp/hosts_from_alpha | diff - /etc/hosts && echo identical
+```
+
+- The trailing `/` on `/etc/sysconfig/` matters. With it, rsync copies the contents into `sysconfig_backup/`. Without it, you get `sysconfig_backup/sysconfig/`.
+- `rsync -a` keeps permissions and ownership, and `-v` lists what was copied.
+- Inside `sftp`, `put` uploads and `get` downloads.
 
 ### Section 5 — Software Management
 
