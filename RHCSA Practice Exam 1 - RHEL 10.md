@@ -1,7 +1,3 @@
- manual
-
-s
-
 ---
 
 title: RHCSA Practice Exam - RHEL 10
