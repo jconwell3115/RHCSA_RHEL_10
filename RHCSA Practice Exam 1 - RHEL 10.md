@@ -1,5 +1,4 @@
 ---
-
 title: RHCSA Practice Exam - RHEL 10
 tags: [certifications, rhcsa, rhel10, practice, linux]
 created: 2026-05-12
@@ -18,17 +17,15 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 > **⏱️ Budget is 3 hours, not 2.5.** 35 tasks at 2.5 hrs works out to ~4.3 min/task, which is not achievable. Don't read a timer overrun as "not ready" — the real EX200 presents far fewer, larger tasks, so per-task pacing here doesn't transfer. Confirm the real exam's current duration on Red Hat's objectives page.
 
 > **📌 Answer key is at the end of this file, not under each task.** This exam originally carried its solutions inline; they were moved on 2026-09-09 so it can be re-run cold. Working it with the answers visible trains recognition — the real exam tests recall.
-
 ---
-
 ## 🖥️ Lab Environment Setup
 
 ### Required Virtual Machines
 
-| VM               | vCPU | RAM  | Primary Disk      | Extra Disks                              |
-| ---------------- | ---- | ---- | ----------------- | ---------------------------------------- |
-| `rhel10-alpha` | 2    | 2 GB | 20 GB`/dev/vda` | none (add 10 GB`/dev/vdb` after setup) |
-| `rhel10-bravo` | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`, 5 GB `/dev/vdc`     |
+| VM                   | vCPU | RAM  | Primary Disk      | Extra Disks                              |
+| -------------------- | ---- | ---- | ----------------- | ---------------------------------------- |
+| exit`rhel10-alpha` | 2    | 2 GB | 20 GB`/dev/vda` | none (add 10 GB`/dev/vdb` after setup) |
+| `rhel10-bravo`     | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`, 5 GB `/dev/vdc`     |
 
 ### VM Configuration Notes
 
@@ -302,8 +299,9 @@ Part A — Package groups:
 
 Part B — Flatpak (now a mandatory RHCSA objective):
 
-- Add the Flathub remote
-- Search for, install, run, update, and remove an application
+- No internet: use the Flatpaks on the mounted RHEL 10 DVD (`/mnt/rhel10iso/Flatpaks`)
+- Add a system-wide remote named `rhel`, then install Firefox from the DVD
+- List, run, and remove the application
 - Clean up unused runtimes
 
 Part C — Installing an alternate app-stream version (the modern replacement for module streams):
@@ -1051,6 +1049,7 @@ ssh root@bravo cat /tmp/hosts_from_alpha | diff - /etc/hosts && echo identical
 **T13 — Repositories**
 
 ```bash
+sudo mkdir -p /mnt/rhel10iso
 sudo mount /dev/sr0 /mnt/rhel10iso
 
 # Create the repo 
@@ -1074,6 +1073,9 @@ ls /mnt/rhel10iso/
 
 # Make persist past reboot
 echo '/dev/sr0  /mnt/rhel10iso  iso9660  ro,nofail  0 0' | sudo tee -a /etc/fstab
+
+# Update Daemon
+sudo systemctl daemon-reload
 
 # Test persistence without reboot
 sudo umount /mnt/rhel10iso 2>/dev/null
@@ -1108,21 +1110,26 @@ sudo dnf group install "Development Tools" -y
 sudo dnf group remove "Development Tools" -y
 
 # Part B
+sudo dnf install flatpak -y            # if not already installed
 flatpak remotes
-flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
-flatpak search gimp
-flatpak install flathub org.gimp.GIMP -y
-flatpak list
-flatpak run org.gimp.GIMP
-flatpak update -y
-flatpak uninstall org.gimp.GIMP -y
-flatpak uninstall --unused -y
+sudo flatpak remote-add --if-not-exists --no-gpg-verify rhel oci+http://127.0.0.1:1   # dummy URL; images come from the DVD
+sudo flatpak install -y --sideload-repo=oci:/mnt/rhel10iso/Flatpaks rhel org.mozilla.firefox
+flatpak list                           # Firefox + com.redhat.Platform runtime
+flatpak info org.mozilla.firefox
+flatpak run org.mozilla.firefox
+sudo flatpak uninstall -y org.mozilla.firefox
+sudo flatpak uninstall -y --unused
 
 # Part C
-dnf list postgresql\*        # discover available versioned packages
-sudo dnf install postgresql-server -y
+sudo dnf list 'postgresql*server'   # postgresql-server (16) and postgresql18-server (18) — needs sudo, non-root dnf won't load repo metadata
+sudo dnf install postgresql-server -y   # or postgresql18-server for the alternate version
 rpm -q postgresql-server
 ```
+
+- The DVD's `Flatpaks/` directory is an OCI image layout holding `com.redhat.Platform` (runtime), `org.mozilla.firefox`, and `org.mozilla.Thunderbird`.
+- `--sideload-repo=oci:PATH` pulls the images from the DVD instead of the network. The `rhel` remote only gives flatpak a name to install from, so its URL is a dummy. Pointing it at the real `oci+https://flatpaks.redhat.io/rhel` fails on a networked host with "Failed to get tokens … Please login to the Red Hat Registry".
+- `flatpak install oci:/mnt/rhel10iso/Flatpaks` (the `--image` form) fails with "Multiple images in registry" because the DVD images have no tags.
+- `flatpak search` and `flatpak update` need the remote's online index, so skip them offline.
 
 > ⚠️ Legacy note (know it exists, don't rely on it): `dnf module list/enable/install/reset` still runs in RHEL 10 but prints "modularity is deprecated" and will be removed in the next major release. postgresql is no longer delivered as a module on RHEL 10, so `dnf module list postgresql` returns nothing — install the RPM directly.
 
