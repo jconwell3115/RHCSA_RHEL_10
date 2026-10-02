@@ -19,18 +19,18 @@ note: Golden image build lives here; RHCA lab guide references it downstream.
 
 ## 📊 Exam-at-a-Glance
 
-| Attribute         | Exam 1                                       | Exam 2                                         | Exam 3                                                                                                |
-| ----------------- | -------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| VMs               | `rhel10-alpha`, `rhel10-bravo`           | `rhel10-charlie`, `rhel10-delta`           | `rhel10-echo`, `rhel10-foxtrot`                                                                   |
-| Subnet            | `192.168.100.0/24`                         | `10.20.30.0/24`                              | `172.16.40.0/24`                                                                                    |
-| Node IPs          | alpha`.10`, bravo `.20`                  | charlie`.11`, delta `.12`                  | echo`.21`, foxtrot `.22` (also has IPv6 `fd10::/64`)                                            |
-| Break-in target   | bravo (init=/bin/bash method)                | charlie (init=/bin/bash method)                | foxtrot (broken fstab + scrambled root, Task 1)                                                       |
-| Special boot      | none                                         | delta boots to`rescue.target`                | none — but echo has a pre-broken`labdata.service` (Task 4) and seeded SELinux violations (Task 33) |
-| Extra disks       | alpha +10G; bravo +10G, +5G                  | charlie +8G, +6G, +4G; delta +8G               | echo +8G, +6G; foxtrot +8G                                                                            |
-| Local repo source | DVD ISO attached to`alpha` as `/dev/sr0` | DVD ISO attached to`charlie` as `/dev/sr0` | DVD ISO attached to`echo` as `/dev/sr0`                                                           |
-| Tasks             | 35                                           | 35                                             | 35 (gap-fill: covers objectives Exams 1–2 didn't touch)                                              |
-| Time limit        | 2.5 hrs                                      | 2.5 hrs                                        | **4 hrs** (or two sittings)                                                                     |
-| Pass mark         | 25 / 35                                      | 25 / 35                                        | 25 / 35                                                                                               |
+| Attribute         | Exam 1                                                     | Exam 2                                         | Exam 3                                                                                                |
+| ----------------- | ---------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| VMs               | `rhel10-alpha`, `rhel10-bravo`                         | `rhel10-charlie`, `rhel10-delta`           | `rhel10-echo`, `rhel10-foxtrot`                                                                   |
+| Subnet            | `192.168.100.0/24`                                       | `10.20.30.0/24`                              | `172.16.40.0/24`                                                                                    |
+| Node IPs          | alpha`.10`, bravo `.20`                                | charlie`.11`, delta `.12`                  | echo`.21`, foxtrot `.22` (also has IPv6 `fd10::/64`)                                            |
+| Break-in target   | bravo (init=/bin/bash method)                              | charlie (init=/bin/bash method)                | foxtrot (broken fstab + scrambled root, Task 1)                                                       |
+| Special boot      | none                                                       | delta boots to`rescue.target`                | none — but echo has a pre-broken`labdata.service` (Task 4) and seeded SELinux violations (Task 33) |
+| Extra disks       | alpha +10G; bravo +10G, +5G                                | charlie +8G, +6G, +4G; delta +8G               | echo +8G, +6G; foxtrot +8G                                                                            |
+| Local repo source | DVD ISO attached to`alpha` and `bravo` as `/dev/sr0` | DVD ISO attached to`charlie` as `/dev/sr0` | DVD ISO attached to`echo` as `/dev/sr0`                                                           |
+| Tasks             | 35                                                         | 35                                             | 35 (gap-fill: covers objectives Exams 1–2 didn't touch)                                              |
+| Time limit        | 2.5 hrs                                                    | 2.5 hrs                                        | **4 hrs** (or two sittings)                                                                     |
+| Pass mark         | 25 / 35                                                    | 25 / 35                                        | 25 / 35                                                                                               |
 
 ---
 
@@ -534,16 +534,18 @@ echo "bravo root password scrambled — break in via rd.break (Task 1)."
 
 Leave alpha's root password at the known golden value (`RootLab_2026`).
 
-### 3.5b — Attach the DVD ISO to alpha (Task 13 repo source)
+### 3.5b — Attach the DVD ISO to alpha and bravo (Task 13 repo source)
 
 > **Note:** the sda disk is created by deffault as the VMs CD-ROM drive and cannot be removed.  Modify it to insert the .iso as source repo.  If VM is off, remove the `--live` parameter.
 
 ```bash
-sudo virsh change-media rhel10-alpha sda /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config --live
-sudo virsh domblklist rhel10-alpha   # confirm the cdrom shows up
+for vm in rhel10-alpha rhel10-bravo; do
+  sudo virsh change-media "$vm" sda /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config --live
+  sudo virsh domblklist "$vm"   # confirm the cdrom shows up
+done
 ```
 
-> Inside alpha it appears as `/dev/sr0`. Students mount it at `/mnt/rhel10iso` and point the `.repo` file at `BaseOS`/`AppStream` (Task 13). Attach **before** the 3.6 snapshot so `exam1-ready` retains the media across reverts.
+> Inside each VM it appears as `/dev/sr0`. Students mount it at `/mnt/rhel10iso` and point the `.repo` file at `BaseOS`/`AppStream` (Task 13). Bravo has no internet either, so it needs the same local repo for `nfs-utils` (Task 21). Attach **before** the 3.6 snapshot so `exam1-ready` retains the media across reverts.
 
 ### 3.6 — Start and snapshot
 
@@ -858,8 +860,8 @@ Wait for both to return, then verify each persistence-marked task.
 
 `RHCSA-Lab-Scripts/` ships one verifier per exam: `ex1-verify.sh`, `ex2-verify.sh`, `ex3-verify.sh`. Each script prints `PASS`/`FAIL` per check and a summary line (`== N passed, M failed ==`). It reads `hostname -s` and runs only the block for the host it is on (`*alpha*`/`*bravo*`, `*charlie*`/`*delta*`, `*echo*`/`*foxtrot*`), so **copy the same script to both VMs of the exam** and run it on each.
 
-| Exam | Script          | Copy to (VM → IP after the network task)                 |
-| ---- | --------------- | -------------------------------------------------------- |
+| Exam | Script            | Copy to (VM → IP after the network task)                                      |
+| ---- | ----------------- | ------------------------------------------------------------------------------ |
 | 1    | `ex1-verify.sh` | `rhel10-alpha` → `192.168.100.10`, `rhel10-bravo` → `192.168.100.20` |
 | 2    | `ex2-verify.sh` | `rhel10-charlie` → `10.20.30.11`, `rhel10-delta` → `10.20.30.12`     |
 | 3    | `ex3-verify.sh` | `rhel10-echo` → `172.16.40.21`, `rhel10-foxtrot` → `172.16.40.22`    |
@@ -953,13 +955,13 @@ Grading is a snapshot of the exam state, so do not fix anything yet. Record the 
 
 The verifiers only work over the network, so some hosts need a workaround during or right after the exam:
 
-| Situation                                                         | What to do                                                                                                                                                                |
-| ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Exam 2 **delta** — Task 11 sets `AllowUsers root emma frank`       | `student` can no longer log in. Copy the script to delta **before** the sshd task (grading spoilers aside), or read the checks from `RHCSA-Lab-Scripts/ex2-verify.sh` and run them by hand via `virsh console`. |
-| Exam 2 **delta** boots to `rescue.target` (pre-condition)          | sshd is not running until Task 2 is done — scp only after the target is fixed.                                                                                             |
-| Exam 3 **foxtrot** — broken `fstab` / scrambled root (Task 1)      | No sshd until Task 1 is fixed. Grade via the console, or after the repair.                                                                                                  |
-| Static IP task done wrongly (bad address/gateway)                  | The VM is unreachable on its expected IP. Use `sudo virsh console <vm>` and fix networking first — that check will show `FAIL` anyway.                                     |
-| The VM was never renamed (Task 4 skipped)                          | The script matches on `hostname -s`; with `rhel10-alpha` it still matches `*alpha*`, so it works — the `T4 hostname` check will simply fail.                               |
+| Situation                                                             | What to do                                                                                                                                                                                                                  |
+| --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Exam 2**delta** — Task 11 sets `AllowUsers root emma frank`  | `student` can no longer log in. Copy the script to delta **before** the sshd task (grading spoilers aside), or read the checks from `RHCSA-Lab-Scripts/ex2-verify.sh` and run them by hand via `virsh console`. |
+| Exam 2**delta** boots to `rescue.target` (pre-condition)      | sshd is not running until Task 2 is done — scp only after the target is fixed.                                                                                                                                             |
+| Exam 3**foxtrot** — broken `fstab` / scrambled root (Task 1) | No sshd until Task 1 is fixed. Grade via the console, or after the repair.                                                                                                                                                  |
+| Static IP task done wrongly (bad address/gateway)                     | The VM is unreachable on its expected IP. Use`sudo virsh console <vm>` and fix networking first — that check will show `FAIL` anyway.                                                                                  |
+| The VM was never renamed (Task 4 skipped)                             | The script matches on`hostname -s`; with `rhel10-alpha` it still matches `*alpha*`, so it works — the `T4 hostname` check will simply fail.                                                                        |
 
 > The exam files also embed the same script under their Grading Checklist, if you would rather paste it into a `virsh console` session than copy it over SSH.
 
@@ -1021,7 +1023,7 @@ sudo virt-clone --original rhel10-golden --name rhel10-bravo \
   --file /home/libvirt/images/rhel10-bravo.qcow2
 
 # Then repeat Phase 3.2 – 3.6: network, hostname/mem/vcpus, extra disks,
-# bravo's scrambled root password, alpha's DVD ISO, start + exam1-ready snapshot.
+# bravo's scrambled root password, DVD ISO on alpha + bravo, start + exam1-ready snapshot.
 ```
 
 ### Exam 2 (charlie & delta)
@@ -1134,14 +1136,16 @@ sudo "${ADDDISK}" rhel10-echo    vdb 8
 sudo "${ADDDISK}" rhel10-echo    vdc 6
 sudo "${ADDDISK}" rhel10-foxtrot vdb 8
 
-echo "== Attaching DVD ISO for Task 13/17 repo work (alpha + charlie + echo) =="
+echo "== Attaching DVD ISO for Task 13/17 repo work (alpha + bravo + charlie + echo) =="
 for vm in rhel10-alpha rhel10-charlie; do
   sudo virsh attach-disk "${vm}" \
     /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso \
     sda --type cdrom --mode readonly --config
 done
-sudo virsh change-media rhel10-echo sda \
-  /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
+for vm in rhel10-bravo rhel10-echo; do
+  sudo virsh change-media "${vm}" sda \
+    /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
+done
 
 echo "== Seeding Exam 1/2 pre-conditions (offline, no boot needed) =="
 sudo virt-customize -d rhel10-bravo   --root-password "password:$(openssl rand -base64 24)"

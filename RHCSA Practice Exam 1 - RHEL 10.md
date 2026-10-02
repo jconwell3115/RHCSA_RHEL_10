@@ -45,6 +45,8 @@ The real exam has repos pre-configured or gives you a URL. For lab purposes, eit
 - Subscribe with a Red Hat Developer account: `subscription-manager register`
 - Or mount the RHEL 10 ISO and configure a local repo (covered in Task 13)
 
+> **Attach the RHEL 10 ISO to both VMs' CD/DVD drives.** Bravo has no internet either. It needs a working repo for `nfs-utils` (Task 21), so repeat the Task 13 repo setup on bravo too.
+
 ---
 
 ## 📋 Exam Instructions
@@ -257,6 +259,8 @@ sudo dnf clean all
 dnf repolist
 ```
 
+> **Environment prep (not a graded task):** Bravo also needs packages later (`nfs-utils` in Task 21). Once Task 13 works on alpha, do the same steps on bravo with the ISO attached to bravo's DVD drive.
+
 **Task 13 — Configure Repositories** *(alpha)*
 
 > Objective: Install and update software packages from Red Hat CDN, remote repo, or local file system.  Ensure it persists after reboot.
@@ -431,7 +435,7 @@ On `alpha`, configure `autofs` to automatically mount user home directories from
 4. Start and enable `autofs`
 5. Test by switching to a user whose home directory should be mounted
 
-> You will need to create and export `/export/home` on bravo first, with a test user whose home lives there.
+> You will need to create and export `/export/home` on bravo first, with a test user whose home liv es there.
 
 ---
 
@@ -843,6 +847,32 @@ firewall-cmd --zone=internal --list-all
 ---
 
 ### Section 3 — Users, Groups & Permissions
+
+**Reference — Listing users and groups**
+
+```bash
+# Users
+getent passwd                      # all users: name:x:UID:GID:comment:home:shell
+getent passwd | cut -d: -f1        # usernames only
+getent passwd alice                # one user
+awk -F: '$3>=1000 && $3<65534 {print $1}' /etc/passwd   # regular (non-system) users only
+
+# Groups
+getent group                       # all groups: name:x:GID:members
+getent group | cut -d: -f1         # group names only
+getent group wheel                 # one group and its members
+
+# One user
+id alice                           # UID, GID and every group alice is in
+groups alice                       # group names only
+sudo chage -l alice                # password aging info
+lslogins                           # summary table of accounts (util-linux)
+lslogins alice                     # detailed view of one account
+```
+
+- `getent` also returns users from network directories such as LDAP or IdM, while `cat /etc/passwd` shows only local ones. On a lab VM the results are the same.
+- The files are `/etc/passwd`, `/etc/group`, `/etc/shadow` and `/etc/gshadow`. The last two are root-only.
+- The member list in `getent group` shows only users who have it as a supplementary group. A user whose primary group it is won't appear, so check with `id username`.
 
 **T6 — Create users and groups**
 
@@ -1364,6 +1394,9 @@ df -h shows /mnt/lv_data ~1.0G
 **T21 — NFS server**
 
 ```bash
+# Prereq: bravo needs a repo — repeat the T13 ISO mount + rhel10-local.repo on bravo first
+sudo dnf repolist
+
 # Install NFS utilities
 sudo dnf install -y nfs-utils
 
@@ -1555,7 +1588,8 @@ sudo chmod 640 /tmp/badperms
 ls -l /tmp/badperms
 
 # Find world-writable files under /etc and save the list
-sudo find /etc -perm -o+w -type f > /root/world_writable.txt
+# The redirect runs in your (non-root) shell, so "sudo find ... > /root/..." fails; let tee write the file as root
+sudo find /etc -perm -o+w -type f | sudo tee /root/world_writable.txt
 
 # Verify
 sudo cat /root/world_writable.txt
