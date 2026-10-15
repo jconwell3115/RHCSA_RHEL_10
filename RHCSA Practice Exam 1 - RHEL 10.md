@@ -4,8 +4,7 @@ tags: [certifications, rhcsa, rhel10, practice, linux]
 created: 2026-05-12
 restructured: 2026-09-09 - answer key moved to bottom for cold re-runs
 note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading Checklist during a timed run.
-------------------------------------------------------------------------------------------------------------
-
+---
 # 🧪 RHCSA Practice Exam — RHEL 10 (EX200)
 
 > **Format:** Performance-based | **Time budget:** 3 hours | **Pass Score:** ~70% (25 / 35)
@@ -17,15 +16,17 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 > **⏱️ Budget is 3 hours, not 2.5.** 35 tasks at 2.5 hrs works out to ~4.3 min/task, which is not achievable. Don't read a timer overrun as "not ready" — the real EX200 presents far fewer, larger tasks, so per-task pacing here doesn't transfer. Confirm the real exam's current duration on Red Hat's objectives page.
 
 > **📌 Answer key is at the end of this file, not under each task.** This exam originally carried its solutions inline; they were moved on 2026-09-09 so it can be re-run cold. Working it with the answers visible trains recognition — the real exam tests recall.
+
 ---
+
 ## 🖥️ Lab Environment Setup
 
 ### Required Virtual Machines
 
-| VM                   | vCPU | RAM  | Primary Disk      | Extra Disks                              |
-| -------------------- | ---- | ---- | ----------------- | ---------------------------------------- |
-| exit`rhel10-alpha` | 2    | 2 GB | 20 GB`/dev/vda` | none (add 10 GB`/dev/vdb` after setup) |
-| `rhel10-bravo`     | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`, 5 GB `/dev/vdc`     |
+| VM               | vCPU | RAM  | Primary Disk      | Extra Disks                              |
+| ---------------- | ---- | ---- | ----------------- | ---------------------------------------- |
+| `rhel10-alpha` | 2    | 2 GB | 20 GB`/dev/vda` | none (add 10 GB`/dev/vdb` after setup) |
+| `rhel10-bravo` | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`, 5 GB `/dev/vdc`     |
 
 ### VM Configuration Notes
 
@@ -435,7 +436,7 @@ On `alpha`, configure `autofs` to automatically mount user home directories from
 4. Start and enable `autofs`
 5. Test by switching to a user whose home directory should be mounted
 
-> You will need to create and export `/export/home` on bravo first, with a test user whose home liv es there.
+> You will need to create and export `/export/home` on bravo first, with a test user whose home lives there.
 
 ---
 
@@ -477,7 +478,7 @@ The following files and directories have incorrect permissions. Fix them:
 3. Display the currently active profile
 4. Change the active profile to `throughput-performance`
 5. Verify the active profile
-6. Set up a **merged profile** combining `virtual-guest` and `powersave` — create a custom profile called `lab-custom` in `/etc/tuned/lab-custom/`
+6. Set up a **merged profile** combining `virtual-guest` and `powersave` — create a custom profile called `lab-custom` in `/etc/tuned/profiles/lab-custom/`
 7. Apply `lab-custom` as the active profile
 8. Make sure it survives a reboot — verify every file that controls profile persistence on RHEL 10
 
@@ -501,7 +502,7 @@ The following files and directories have incorrect permissions. Fix them:
 
 > Objective: Locate and interpret system log files and journals, Preserve system journals
 
-1. Configure `systemd-journald` to store logs persistently by editing `/etc/systemd/journald.conf`
+1. Configure `systemd-journald` to store logs persistently using a drop-in under `/etc/systemd/journald.conf.d/` (on RHEL 10 `/etc/systemd/journald.conf` does not exist by default)
 2. Verify the journal directory is created at `/var/log/journal/`
 3. Use `journalctl` to:
    - Show logs since last boot
@@ -601,7 +602,7 @@ Schedule this script to run at **11:30 PM every night except Sunday** using cron
 
 1. Configure `httpd` to listen on port `8181`
    - Add the non-standard port to the SELinux policy for `http_port_t`
-   - Confirm with `semanage port -l | grep http`
+   - Confirm with `sudo semanage port -l | grep http`
 2. Check the current state of the boolean `httpd_can_network_connect`
 3. Enable the boolean persistently
 4. Check the boolean `httpd_enable_homedirs` and enable it persistently
@@ -1660,12 +1661,18 @@ sudo tuned-adm profile throughput-performance
 tuned-adm active
 
 # Create the merged custom profile 'lab-custom'
-sudo mkdir -p /etc/tuned/lab-custom
-sudo tee /etc/tuned/lab-custom/tuned.conf <<'EOF'
+# RHEL 10 (tuned 2.23+): custom profiles live in /etc/tuned/profiles/<name>/,
+# NOT /etc/tuned/<name>/ as on RHEL 8/9 — see profile_dirs in /etc/tuned/tuned-main.conf
+sudo mkdir -p /etc/tuned/profiles/lab-custom
+sudo tee /etc/tuned/profiles/lab-custom/tuned.conf <<'EOF'
 [main]
 summary=Custom merged profile: virtual-guest + powersave
 include=virtual-guest,powersave
 EOF
+
+# Fix permissions (T10 umask + sudo => 027 => 750/640); match the 755/644 of stock profiles
+sudo chmod 755 /etc/tuned/profiles/lab-custom
+sudo chmod 644 /etc/tuned/profiles/lab-custom/tuned.conf
 
 # Apply lab-custom and verify
 sudo tuned-adm profile lab-custom
@@ -1766,7 +1773,20 @@ Step 7:  new sleep with NI = 15
 
 ```bash
 # Configure journald for persistent storage
-sudo sed -i 's/^#\?Storage=.*/Storage=persistent/' /etc/systemd/journald.conf
+# RHEL 10 (systemd 257) ships defaults in /usr/lib/systemd/journald.conf and no
+# /etc/systemd/journald.conf, so sed has nothing to edit; use a drop-in instead
+# (never edit the /usr/lib copy - package updates overwrite it)
+sudo mkdir -p /etc/systemd/journald.conf.d
+sudo tee /etc/systemd/journald.conf.d/persistent.conf <<'EOF'
+[Journal]
+Storage=persistent
+EOF
+
+# Fix permissions: the T10 umask (0007) combines with sudo's default (0022) to
+# give an effective 027, so the dir/file are created 750/640. journald (root) still
+# reads them, but non-root `systemd-analyze cat-config` silently skips the drop-in.
+sudo chmod 755 /etc/systemd/journald.conf.d
+sudo chmod 644 /etc/systemd/journald.conf.d/persistent.conf
 
 # Create the persistent journal directory (journald will also do this itself on restart)
 sudo mkdir -p /var/log/journal
@@ -1805,7 +1825,7 @@ grep "RHCSA test message" /var/log/messages.info
 Expected Results:
 
 ```text
-Step 1-2:  /etc/systemd/journald.conf has Storage=persistent; /var/log/journal/ exists after restart
+Step 1-2:  /etc/systemd/journald.conf.d/persistent.conf has Storage=persistent; /var/log/journal/ exists after restart
 Step 3:    journalctl -b, -u sshd, -p err, -n 50 all return filtered output
 Step 4:    /var/log/messages.info receives *.info and higher messages after rsyslog restart
 Step 5:    logger test line appears in /var/log/messages.info
@@ -1976,7 +1996,7 @@ sudo /usr/local/bin/bulk_users.sh
 sudo /usr/local/bin/bulk_users.sh
 
 # Verify
-for u in $(cat /root/userlist.txt); do id "$u"; done
+for u in $(sudo cat /root/userlist.txt); do id "$u"; done
 ```
 
 **T32 — etcbackup.sh**
@@ -2028,13 +2048,135 @@ In cron's day-of-week field, `0` (and `7`) is Sunday, so `1-6` is Monday through
 
 ### Section 10 — SELinux
 
+**T33 — SELinux modes and contexts**
+
+```bash
+# --- alpha: confirm enforcing, make it persistent ---
+getenforce                                   # runtime mode
+sestatus                                     # runtime + "Mode from config file"
+sudo setenforce 1                            # switch to enforcing now (if it isn't)
+sudo sed -i 's/^SELINUX=.*/SELINUX=enforcing/' /etc/selinux/config
+grep ^SELINUX= /etc/selinux/config
+
+# Make sure SELinux isn't disabled on the kernel command line
+sudo grubby --info=ALL | grep -E 'selinux=0|enforcing=0'   # should print nothing
+sudo grubby --update-kernel=ALL --remove-args="selinux enforcing"   # only if it did
+```
+
+```bash
+# --- bravo: permissive, persistently ---
+sudo setenforce 0                            # permissive now
+sudo sed -i 's/^SELINUX=.*/SELINUX=permissive/' /etc/selinux/config
+getenforce                                   # Permissive
+grep ^SELINUX= /etc/selinux/config           # SELINUX=permissive
+```
+
+```bash
+# --- alpha: label /webtest for httpd ---
+sudo mkdir -p /webtest
+echo "Hello RHCSA" | sudo tee /webtest/index.html > /dev/null
+
+# The T10 umask + sudo give 750/640 - the apache user couldn't read the
+# content even with the right SELinux label (403 Forbidden from DAC, not SELinux)
+sudo chmod 755 /webtest
+sudo chmod 644 /webtest/index.html
+
+ls -Zd /webtest /webtest/index.html          # default_t - wrong for httpd
+
+sudo semanage fcontext -a -t httpd_sys_content_t '/webtest(/.*)?'
+sudo semanage fcontext -l | grep webtest     # confirm the rule was saved
+sudo restorecon -Rv /webtest                 # apply it
+ls -Zd /webtest /webtest/index.html          # httpd_sys_content_t
+
+# Serve /webtest with httpd at http://alpha/webtest/
+sudo tee /etc/httpd/conf.d/webtest.conf > /dev/null <<'EOF'
+Alias /webtest /webtest
+<Directory "/webtest">
+    Require all granted
+</Directory>
+EOF
+sudo chmod 644 /etc/httpd/conf.d/webtest.conf
+
+sudo dnf install -y httpd                    # if T14 didn't already install it
+sudo apachectl configtest                    # Syntax OK
+sudo systemctl enable --now httpd
+curl http://localhost/webtest/               # Hello RHCSA
+
+# Process context: httpd runs in the httpd_t domain
+ps -eZ | grep httpd
+```
+
+`chcon` would also change the label, but it isn't saved in the policy: the next
+`restorecon` or a filesystem relabel puts `default_t` back. `semanage fcontext` +
+`restorecon` is the persistent method the exam expects.
+
+If `curl` returns **403**, check in this order:
+
+1. DAC permissions: `namei -l /webtest/index.html` (every directory needs `x` for others)
+2. SELinux label: `ls -Z /webtest/index.html`
+3. SELinux denials: `sudo ausearch -m AVC -ts recent` or `sudo journalctl -t setroubleshoot`
+
+Expected Results:
+
+```text
+alpha:  getenforce = Enforcing; /etc/selinux/config has SELINUX=enforcing
+bravo:  getenforce = Permissive; /etc/selinux/config has SELINUX=permissive
+alpha:  ls -Zd /webtest shows httpd_sys_content_t
+alpha:  curl http://localhost/webtest/ returns "Hello RHCSA"
+alpha:  ps -eZ shows httpd processes as system_u:system_r:httpd_t:s0
+```
+
+---
+
 **T34 — SELinux ports and booleans**
 
 ```bash
-semanage port -a -t http_port_t -p tcp 8181
-setsebool -P httpd_can_network_connect on
-setsebool -P httpd_enable_homedirs on
-restorecon -v /var/www/html/hosts.txt
+# 1. httpd on 8181 (keep the existing Listen 80 for T33)
+echo "Listen 8181" | sudo tee /etc/httpd/conf.d/port8181.conf > /dev/null
+sudo chmod 644 /etc/httpd/conf.d/port8181.conf
+
+sudo semanage port -a -t http_port_t -p tcp 8181   # "already defined"? use -m instead of -a
+sudo semanage port -l | grep http_port_t           # 8181 now in the list
+
+sudo firewall-cmd --permanent --add-port=8181/tcp
+sudo firewall-cmd --reload
+sudo systemctl restart httpd                       # fails with "Permission denied: could not bind" if the port label is missing
+sudo ss -tlnp | grep 8181
+curl -I http://localhost:8181/                     # 403 is OK: no index.html, so welcome.conf serves the test page
+
+# 2-3. httpd_can_network_connect
+getsebool httpd_can_network_connect                # off
+sudo setsebool -P httpd_can_network_connect on     # -P = persistent across reboots
+getsebool httpd_can_network_connect                # on
+
+# 4. httpd_enable_homedirs
+getsebool httpd_enable_homedirs                    # off
+sudo setsebool -P httpd_enable_homedirs on
+sudo semanage boolean -l -C                        # lists booleans changed from their defaults
+
+# 5. Copy and restore the context
+sudo cp -a /etc/hosts /var/www/html/hosts.txt      # -a keeps the source label: net_conf_t
+ls -Z /var/www/html/hosts.txt                      # net_conf_t - wrong for httpd
+sudo restorecon -v /var/www/html/hosts.txt         # relabels to httpd_sys_content_t
+ls -Z /var/www/html/hosts.txt
+curl http://localhost/hosts.txt
+```
+
+`getsebool` works without `sudo`, but every `semanage` command needs it, even read-only
+listing: as a regular user it fails with `ValueError: SELinux policy is not managed or store cannot be accessed`, because it opens and locks the policy store under
+`/var/lib/selinux/`, which needs root.
+
+A plain `cp` (no `-a`) gives the new file the directory's label
+(`httpd_sys_content_t`) straight away, so there's nothing to restore. `mv` and `cp -a`
+keep the old label, which is the usual cause of SELinux 403 errors.
+
+Expected Results:
+
+```text
+semanage port -l:  http_port_t  tcp  8181, 80, 81, 443, ...
+ss -tlnp:          httpd listening on *:8181 (and *:80)
+getsebool:         httpd_can_network_connect --> on, httpd_enable_homedirs --> on
+ls -Z hosts.txt:   net_conf_t before restorecon, httpd_sys_content_t after
 ```
 
 ---

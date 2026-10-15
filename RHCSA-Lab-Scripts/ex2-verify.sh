@@ -52,7 +52,7 @@ case "$(hostname -s)" in
     chk "T26 lab-highio active"         "tuned-adm active | grep -q lab-highio"
     chk "T26 swappiness 10"             "sysctl -n vm.swappiness | grep -qx 10"
     chk "T28 journal persistent"        "test -d /var/log/journal"
-    chk "T28 ForwardToSyslog"           "grep -qE '^ForwardToSyslog=yes' /etc/systemd/journald.conf"
+    chk "T28 ForwardToSyslog"           "grep -qsE '^ForwardToSyslog=yes' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/*.conf"
     chk "T28 secure.lab rule"           "grep -q 'secure.lab' /etc/rsyslog.conf /etc/rsyslog.d/* 2>/dev/null"
     chk "T28 logrotate config"          "test -f /etc/logrotate.d/secure.lab"
     chk "T29 labhealth timer enabled"   "systemctl is-enabled --quiet labhealth.timer"

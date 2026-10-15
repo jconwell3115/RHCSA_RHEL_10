@@ -41,7 +41,7 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 | echo    | `echo.ex200.net`    | `172.16.40.21/24`  | `fd10::21/64`    | `172.16.40.1`  | `172.16.40.1, 1.1.1.1`   |
 | foxtrot | `foxtrot.ex200.net` | `172.16.40.22/24`  | `fd10::22/64`    | `172.16.40.1`  | `172.16.40.1, 1.1.1.1`   |
 
-### Build (clones from `rhel10-golden` — see `[[RHCSA Exam Lab Setup]]` Phase 0)
+### Build (clones from `rhel10-golden` — see [README.md](README.md) Phase 0)
 
 ```bash
 # Third network
@@ -1359,7 +1359,13 @@ journalctl _COMM=sudo                                   > /root/j4.txt
 journalctl --disk-usage                                 > /root/j5.txt
 
 sudo journalctl --vacuum-size=200M
-sudo sed -i 's/^#\?SystemMaxUse=.*/SystemMaxUse=200M/' /etc/systemd/journald.conf
+# RHEL 10: no /etc/systemd/journald.conf by default - use a drop-in
+sudo mkdir -p /etc/systemd/journald.conf.d
+printf '[Journal]\nSystemMaxUse=200M\n' | sudo tee /etc/systemd/journald.conf.d/size.conf
+# Restore standard /etc permissions in case a restrictive umask is in effect
+# (sudo combines your umask with its 0022 default, so 007/027 -> 750/640)
+sudo chmod 755 /etc/systemd/journald.conf.d
+sudo chmod 644 /etc/systemd/journald.conf.d/size.conf
 sudo systemctl restart systemd-journald
 ```
 
@@ -1672,4 +1678,4 @@ The delayed exam date turns the biggest weakness in this practice set — that E
 
 ---
 
-*Practice exam #3 created 2026-09-09. Companion to `[[RHCSA Practice Exam 1 - RHEL 10]]` and `[[RHCSA Practice Exam 2 - RHEL 10]]`. Lab build instructions extend `[[RHCSA Exam Lab Setup]]` Phase 0.*
+*Practice exam #3 created 2026-09-09. Companion to [RHCSA Practice Exam 1 - RHEL 10](RHCSA%20Practice%20Exam%201%20-%20RHEL%2010.md) and [RHCSA Practice Exam 2 - RHEL 10](RHCSA%20Practice%20Exam%202%20-%20RHEL%2010.md). Lab build instructions extend [README.md](README.md) Phase 0.*

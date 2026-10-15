@@ -11,7 +11,7 @@ note: Golden image build lives here; RHCA lab guide references it downstream.
 >
 > **Platform:** libvirt/KVM on your existing RHEL host.
 >
-> **Ordering note:** RHCSA comes first in your cert journey, so the **golden image build lives in this guide**. The later `[[RHCA-Practice-Lab-Node-Setup-Guide]]` reuses the same image and simply references Phase 0 here.
+> **Ordering note:** RHCSA comes first in your cert journey, so the **golden image build lives in this guide**. The later *RHCA Practice Lab - Node Setup Guide* (Obsidian vault note) reuses the same image and simply references Phase 0 here.
 >
 > **Key principle:** Each exam has deliberate pre-conditions (broken passwords, extra disks, wrong boot target). Set those up before starting the timer, then snapshot-revert to retake cleanly.
 
@@ -653,7 +653,7 @@ done
 
 ## 🔤 PHASE 5 — Exam 3 Setup (echo & foxtrot)
 
-> Exam 3 is the "gap-fill" paper — it deliberately seeds a broken boot, a broken service, and pre-existing SELinux violations rather than a single break-in condition. See `[[RHCSA Practice Exam 3 - RHEL 10]]` for the full task list; this phase only covers building and seeding the VMs.
+> Exam 3 is the "gap-fill" paper — it deliberately seeds a broken boot, a broken service, and pre-existing SELinux violations rather than a single break-in condition. See [RHCSA Practice Exam 3 - RHEL 10](RHCSA%20Practice%20Exam%203%20-%20RHEL%2010.md) for the full task list; this phase only covers building and seeding the VMs.
 
 ### 5.1 — Clone the VMs
 
@@ -1306,7 +1306,7 @@ sudo virsh define /home/libvirt/backups/<vm>.xml            # re-register a doma
 
 ## 📅 HOW THIS FITS THE CERT TIMELINE
 
-Per `[[RHCA-Ansible-Cert-Path-Timeline]]`:
+Per *RHCA in Ansible - Certification Path Timeline* (Obsidian vault note):
 
 - RHCSA (EX200) is the prerequisite, targeted mid-September 2026.
 - Use Exam 1 first (foundational methods: rd.break, fdisk, simple LVM).
@@ -1328,13 +1328,13 @@ Per `[[RHCA-Ansible-Cert-Path-Timeline]]`:
 
 ---
 
-## 🔗 Related Vault Notes
+## 🔗 Related Notes
 
-- 📄 `[[RHCSA Practice Exam 1 - RHEL 10]]` — 35 tasks, alpha/bravo
-- 📄 `[[RHCSA Practice Exam 2 - RHEL 10]]` — 35 tasks, charlie/delta
-- 📄 `[[RHCSA Practice Exam 3 - RHEL 10]]` — 35 tasks (gap-fill), echo/foxtrot
-- 📄 `[[RHCA-Practice-Lab-Node-Setup-Guide]]` — reuses the golden image from Phase 0 here
-- 📄 `[[RHCA-Ansible-Cert-Path-Timeline]]` — where RHCSA fits in the RHCA journey
+- 📄 [RHCSA Practice Exam 1 - RHEL 10](RHCSA%20Practice%20Exam%201%20-%20RHEL%2010.md) — 35 tasks, alpha/bravo
+- 📄 [RHCSA Practice Exam 2 - RHEL 10](RHCSA%20Practice%20Exam%202%20-%20RHEL%2010.md) — 35 tasks, charlie/delta
+- 📄 [RHCSA Practice Exam 3 - RHEL 10](RHCSA%20Practice%20Exam%203%20-%20RHEL%2010.md) — 35 tasks (gap-fill), echo/foxtrot
+- 📄 *RHCA Practice Lab - Node Setup Guide* (Obsidian vault note) — reuses the golden image from Phase 0 here
+- 📄 *RHCA in Ansible - Certification Path Timeline* (Obsidian vault note) — where RHCSA fits in the RHCA journey
 
 ---
 

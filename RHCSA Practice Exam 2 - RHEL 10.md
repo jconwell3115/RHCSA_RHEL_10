@@ -5,6 +5,7 @@ created: 2026-07-08
 restructured: 2026-09-09 - answer key moved to bottom for cold re-runs
 note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading Checklist during a timed run.
 ---
+
 # 🧪 RHCSA Practice Exam #2 — RHEL 10 (EX200)
 
 > **Format:** Performance-based | **Time budget:** 3 hours | **Pass Score:** ~70% (25 / 35)
@@ -471,7 +472,7 @@ The application at `/opt/finance/` has been broken by a bad `chmod`. Fix these i
 > Objective: Manage tuning profiles
 
 1. Install and enable `tuned`
-2. Create a **new** profile `lab-highio` in `/etc/tuned/lab-highio/tuned.conf`:
+2. Create a **new** profile `lab-highio` in `/etc/tuned/profiles/lab-highio/tuned.conf`:
    - Inherit from `throughput-performance`
    - Set `vm.dirty_ratio = 40`
    - Set `vm.swappiness = 10`
@@ -740,7 +741,7 @@ case "$(hostname -s)" in
     chk "T26 lab-highio active"         "tuned-adm active | grep -q lab-highio"
     chk "T26 swappiness 10"             "sysctl -n vm.swappiness | grep -qx 10"
     chk "T28 journal persistent"        "test -d /var/log/journal"
-    chk "T28 ForwardToSyslog"           "grep -qE '^ForwardToSyslog=yes' /etc/systemd/journald.conf"
+    chk "T28 ForwardToSyslog"           "grep -qsE '^ForwardToSyslog=yes' /etc/systemd/journald.conf /etc/systemd/journald.conf.d/*.conf"
     chk "T28 secure.lab rule"           "grep -q 'secure.lab' /etc/rsyslog.conf /etc/rsyslog.d/* 2>/dev/null"
     chk "T28 logrotate config"          "test -f /etc/logrotate.d/secure.lab"
     chk "T29 labhealth timer enabled"   "systemctl is-enabled --quiet labhealth.timer"
@@ -945,7 +946,22 @@ journalctl -u chronyd -n 20
 
 **T28 — Journal forwarding + logrotate**
 
-`/etc/systemd/journald.conf`: `Storage=persistent`, `SystemMaxUse=500M`, `ForwardToSyslog=yes`.
+RHEL 10 has no `/etc/systemd/journald.conf` by default, so use a drop-in:
+
+```bash
+sudo mkdir -p /etc/systemd/journald.conf.d
+sudo tee /etc/systemd/journald.conf.d/lab.conf <<'EOF'
+[Journal]
+Storage=persistent
+SystemMaxUse=500M
+ForwardToSyslog=yes
+EOF
+# T10's 0027 umask (if student is in ops) combines with sudo's 0022 => 750/640;
+# restore the standard /etc permissions so non-root tools can read the drop-in
+sudo chmod 755 /etc/systemd/journald.conf.d
+sudo chmod 644 /etc/systemd/journald.conf.d/lab.conf
+sudo systemctl restart systemd-journald
+```
 
 rsyslog rule: `authpriv.*    /var/log/secure.lab`
 
