@@ -653,7 +653,7 @@ done
 
 ## 🔤 PHASE 5 — Exam 3 Setup (echo & foxtrot)
 
-> Exam 3 is the "gap-fill" paper — it deliberately seeds a broken boot, a broken service, and pre-existing SELinux violations rather than a single break-in condition. See [RHCSA Practice Exam 3 - RHEL 10](RHCSA%20Practice%20Exam%203%20-%20RHEL%2010.md) for the full task list; this phase only covers building and seeding the VMs.
+> Exam 3 is the "gap-fill" paper — it deliberately seeds a broken boot, a broken service, and pre-existing SELinux violations rather than a single break-in condition. See [RHCSA Practice Exam 3 - RHEL 10](<RHCSA%20Practice%20Exam%203%20-%20RHEL%2010.md>) for the full task list; this phase only covers building and seeding the VMs.
 
 ### 5.1 — Clone the VMs
 
@@ -829,7 +829,7 @@ Or use the Cockpit Virtual Machines UI in a browser at `https://<kvm-host>:9090`
 | Storage (heaviest)    | 35 min      | 16–24                    |
 | Services/logging/time | 20 min      | 25–29                    |
 | Scripting             | 10 min      | 30–32                    |
-| SELinux + containers  | 10 min      | 33–35                    |
+| SELinux + Section 11  | 10 min      | 33–35                    |
 | Reserve / verify      | 5 min       | Final reboot + spot-check |
 
 ---
@@ -1330,9 +1330,9 @@ Per *RHCA in Ansible - Certification Path Timeline* (Obsidian vault note):
 
 ## 🔗 Related Notes
 
-- 📄 [RHCSA Practice Exam 1 - RHEL 10](RHCSA%20Practice%20Exam%201%20-%20RHEL%2010.md) — 35 tasks, alpha/bravo
-- 📄 [RHCSA Practice Exam 2 - RHEL 10](RHCSA%20Practice%20Exam%202%20-%20RHEL%2010.md) — 35 tasks, charlie/delta
-- 📄 [RHCSA Practice Exam 3 - RHEL 10](RHCSA%20Practice%20Exam%203%20-%20RHEL%2010.md) — 35 tasks (gap-fill), echo/foxtrot
+- 📄 [RHCSA Practice Exam 1 - RHEL 10](<RHCSA%20Practice%20Exam%201%20-%20RHEL%2010.md>) — 35 tasks, alpha/bravo
+- 📄 [RHCSA Practice Exam 2 - RHEL 10](<RHCSA%20Practice%20Exam%202%20-%20RHEL%2010.md>) — 35 tasks, charlie/delta
+- 📄 [RHCSA Practice Exam 3 - RHEL 10](<RHCSA%20Practice%20Exam%203%20-%20RHEL%2010.md>) — 35 tasks (gap-fill), echo/foxtrot
 - 📄 *RHCA Practice Lab - Node Setup Guide* (Obsidian vault note) — reuses the golden image from Phase 0 here
 - 📄 *RHCA in Ansible - Certification Path Timeline* (Obsidian vault note) — where RHCSA fits in the RHCA journey
 

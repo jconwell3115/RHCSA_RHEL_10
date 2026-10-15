@@ -80,9 +80,11 @@ The root password on `rhel10-bravo` is unknown. Break into the system using the 
 
 **Task 2 — Configure Boot Target** *(bravo)*
 
-> Objective: Boot systems into different targets manually
+> Objective: Boot systems into different targets manually, Boot, reboot, and shut down a system normally
 
 After breaking into bravo, confirm it is currently booting to `graphical.target`. Change the default boot target to `multi-user.target`. Reboot and verify the system boots without a GUI.
+
+Then shut bravo down **cleanly** from the command line, power it back on, and confirm it reaches the configured target.
 
 ---
 
@@ -280,7 +282,7 @@ Configure a local YUM/DNF repository from the RHEL 10 installation ISO:
 
 **Task 14 — Package Management Operations** *(alpha)*
 
-> Objective: Install and remove RPM software packages
+> Objective: Install and remove RPM software packages, Install and update software packages
 
 - Install the `vim-enhanced`, `tmux`, and `wget` packages
 - Verify `httpd` package is not installed; install it
@@ -289,6 +291,8 @@ Configure a local YUM/DNF repository from the RHEL 10 installation ISO:
 - Use `rpm` to verify the integrity of a package file
 - Install `nmap` from the downloaded RPM
 - Remove `nmap` with `rpm`
+- List the packages that have updates available
+- Update a single package, then record the command you ran and its outcome in `/root/update_result.txt`. If the repo has nothing newer, record that `dnf` reported nothing to do.
 
 ---
 
@@ -610,28 +614,23 @@ Schedule this script to run at **11:30 PM every night except Sunday** using cron
 
 ---
 
-### SECTION 11: Containers with Podman
+### SECTION 11: Essential Tools — Links, find & Archives
 
 ---
 
-**Task 35 — Deploy a Container as a Systemd Service (Quadlet)** *(alpha, as alice)*
+**Task 35 — Hard Links, Soft Links, find and tar** *(alpha)*
 
-> Objective: Find/retrieve container images, Inspect images, Run containers, Configure container as systemd service, Attach persistent storage
+> Objective: Create hard and soft links, Archive, compress, unpack, and uncompress files using tar, gzip, and bzip2, Locate files
 
-As user `alice` (rootless container):
-
-1. Search for and pull the `ubi10/httpd-24` image from `registry.access.redhat.com`
-2. Inspect the image and identify the exposed port
-3. Create a directory `~/web_content/` and add a file `index.html` with content: `"Welcome to Alice's Containerized Web Server!"`
-4. Run the container named `alice_web` in detached mode:
-   - Map local port `8080` to container port `8080`
-   - Bind-mount `~/web_content/` to `/var/www/html/` with `:Z` for SELinux
-5. Verify the container is running with `podman ps`
-6. Test with `curl http://localhost:8080`
-7. Create a **Podman Quadlet** at `~/.config/containers/systemd/alice-web.container` that reproduces that container as a user systemd service, starting at login. It must set the image, container name, published port, and the bind-mounted volume with the correct SELinux relabel flag, and restart always.
-8. Enable user lingering for `alice`
-9. Reload the user daemon and start the service
-10. Reboot and confirm the container starts automatically and the webpage is accessible
+1. Create `/lab/links/original.txt` containing `RHCSA link test`
+2. Create a **hard link** `/lab/links/hard.txt` and an **absolute symbolic link** `/lab/links/soft.txt`, both pointing to `original.txt`
+3. Save a long listing of `/lab/links/` that shows **inode numbers** to `/root/inodes.txt`
+4. Delete `original.txt`. In `/root/links_result.txt`, record which link still returns the content, which one is broken, and why. Leave both links in place.
+5. Find every regular file on the system owned by user `bob` and copy them to `/root/bobfiles/`, preserving their full directory paths. Errors from `/proc` must not appear on the terminal.
+6. Create a **bzip2**-compressed archive `/root/bobfiles.tar.bz2` of `/root/bobfiles/`
+7. Without extracting it, save the archive's file list to `/root/bobfiles_list.txt`
+8. Extract the archive into `/root/restore/`
+9. Copy `/etc/services` to `/root/services`, then compress it with **gzip** so that `/root/services.gz` exists and `/root/services` is kept
 
 ---
 
@@ -642,7 +641,7 @@ Mark each task after verifying it survives a reboot where applicable.
 | #  | Task                                      | Reboot Test | Done |
 | -- | ----------------------------------------- | ----------- | ---- |
 | 1  | Break into bravo, reset root password     | ✓          | [ ]  |
-| 2  | Set default boot target to multi-user     | ✓          | [ ]  |
+| 2  | Default target multi-user + clean poweroff | ✓          | [ ]  |
 | 3  | Modify bootloader (GRUB_TIMEOUT, quiet)   | ✓          | [ ]  |
 | 4  | Static IP + IPv6 + hostname + /etc/hosts  | ✓          | [ ]  |
 | 5  | Firewall rules (SSH, HTTP, ports)         | ✓          | [ ]  |
@@ -654,7 +653,7 @@ Mark each task after verifying it survives a reboot where applicable.
 | 11 | Key-based SSH (root + alice)              | ✓          | [ ]  |
 | 12 | scp, rsync, sftp transfers                | —          | [ ]  |
 | 13 | Configure local DNF repo from ISO         | ✓          | [ ]  |
-| 14 | Package install/remove/query with RPM+DNF | —          | [ ]  |
+| 14 | Package install/remove/query/update      | —          | [ ]  |
 | 15 | Package groups + Flatpak + versioned RPM  | —          | [ ]  |
 | 16 | GPT partitions on /dev/vdb                | ✓          | [ ]  |
 | 17 | Format + mount by UUID and LABEL          | ✓          | [ ]  |
@@ -675,7 +674,7 @@ Mark each task after verifying it survives a reboot where applicable.
 | 32 | Backup script + cron job                  | ✓          | [ ]  |
 | 33 | SELinux modes + fcontext + restorecon     | ✓          | [ ]  |
 | 34 | SELinux ports + booleans                  | ✓          | [ ]  |
-| 35 | Podman container + Quadlet service        | ✓          | [ ]  |
+| 35 | Hard/soft links + find + tar.bz2 + gzip   | ✓          | [ ]  |
 
 **Score: ___ / 35**
 
@@ -719,6 +718,7 @@ case "$(hostname -s)" in
     chk "T13 iso mounted"              "findmnt /mnt/rhel10iso"
     chk "T13 repo enabled"             "dnf repolist 2>/dev/null | grep -qi appstream"
     chk "T13 fstab has nofail"         "grep -q '/mnt/rhel10iso' /etc/fstab && grep '/mnt/rhel10iso' /etc/fstab | grep -q nofail"
+    chk "T14 update result recorded"   "test -s /root/update_result.txt"
     chk "T24 /var/www/html 755 root"   "stat -c '%a %U' /var/www/html | grep -qx '755 root'"
     chk "T24 /secure/app 2770"         "stat -c '%a' /secure/app | grep -qx 2770"
     chk "T24 badperms 640 bob"         "stat -c '%a %U:%G' /tmp/badperms | grep -qx '640 bob:developers'"
@@ -736,11 +736,15 @@ case "$(hostname -s)" in
     chk "T34 port 8181 labeled"        "semanage port -l | grep http_port_t | grep -q 8181"
     chk "T34 httpd_can_network_connect" "getsebool httpd_can_network_connect | grep -q ' on$'"
     chk "T34 httpd_enable_homedirs"    "getsebool httpd_enable_homedirs | grep -q ' on$'"
-    chk "T35 linger enabled for alice" "loginctl show-user alice -p Linger | grep -qi yes"
-    chk "T35 container serving 8080"   "curl -sf http://localhost:8080/ | grep -qi alice"
+    chk "T35 hard link survives"       "grep -q 'RHCSA link test' /lab/links/hard.txt"
+    chk "T35 soft link dangling"       "test -L /lab/links/soft.txt && ! test -e /lab/links/soft.txt"
+    chk "T35 bz2 archive has bobfile"  "tar -tjf /root/bobfiles.tar.bz2 | grep -q bobfile"
+    chk "T35 archive extracted"        "find /root/restore -name bobfile | grep -q ."
+    chk "T35 services.gz + original"   "test -f /root/services.gz -a -f /root/services"
     ;;
   *bravo*)
     chk "T2  default multi-user"       "systemctl get-default | grep -qx multi-user.target"
+    chk "T2  clean shutdown recorded"  "last -x shutdown | grep -q shutdown"
     chk "T4  hostname bravo.lab.local" "hostnamectl --static | grep -qx bravo.lab.local"
     chk "T4  static IPv4 .20"          "ip -4 addr show | grep -q '192.168.100.20'"
     chk "T10 umask drop-in"            "grep -rq 'umask 0*007' /etc/profile.d/"
@@ -784,10 +788,21 @@ Key steps: `init=/bin/bash`, `mount -o remount,rw /`, `passwd root`, `touch /.au
 
 **T2 — Boot target**
 
-```
+```bash
 systemctl get-default
 systemctl set-default multi-user.target
+systemctl reboot
+
+# Clean shutdown, then power on from the hypervisor
+systemctl poweroff               # or: shutdown -h now
+# after power-on:
+systemctl get-default            # multi-user.target
+who -b                           # last boot time
+last -x shutdown | head -3       # a "shutdown" record proves a clean stop
 ```
+
+`poweroff` stops the system and cuts power. `halt` stops it but leaves the machine powered
+on. A hard reset in the hypervisor leaves no `shutdown` entry in `last -x`.
 
 **T3 — Bootloader**
 
@@ -1129,7 +1144,16 @@ sudo rpm -e nmap
 
 # Verify Uninstall, use before uninstall to verify present
 sudo rpm -qa nmap
+
+# Updates
+dnf check-update                 # exit code 100 = updates available, 0 = none
+sudo dnf update -y wget          # update/upgrade are aliases; no package name = everything
+dnf history list | head -3       # confirm the transaction
+echo "dnf update -y wget: <upgraded | nothing to do>" | sudo tee /root/update_result.txt
 ```
+
+The DVD repo matches the installed release, so `dnf update` will often report "Nothing to do".
+That still counts: the skill is knowing the commands.
 
 **T15 — Package groups, Flatpak, versioned RPMs**
 
@@ -2181,33 +2205,66 @@ ls -Z hosts.txt:   net_conf_t before restorecon, httpd_sys_content_t after
 
 ---
 
-### Section 11 — Containers
+### Section 11 — Essential Tools
 
-**T35 — Quadlet**
-
-```ini
-# ~/.config/containers/systemd/alice-web.container
-[Unit]
-Description=Alice Web Container
-After=local-fs.target
-
-[Container]
-Image=registry.access.redhat.com/ubi10/httpd-24
-PublishPort=8080:8080
-Volume=%h/web_content:/var/www/html:Z
-ContainerName=alice_web
-
-[Service]
-Restart=always
-
-[Install]
-WantedBy=default.target
-```
+**T35 — Links, find and tar**
 
 ```bash
-loginctl enable-linger alice
-systemctl --user daemon-reload
-systemctl --user enable --now alice-web.service
+# 1-2. File, hard link, absolute soft link
+sudo mkdir -p /lab/links
+echo "RHCSA link test" | sudo tee /lab/links/original.txt > /dev/null
+sudo ln /lab/links/original.txt /lab/links/hard.txt
+sudo ln -s /lab/links/original.txt /lab/links/soft.txt
+
+# 3. -i adds the inode column
+ls -li /lab/links/ | sudo tee /root/inodes.txt
+
+# 4. Delete the original and test both links
+sudo rm /lab/links/original.txt
+cat /lab/links/hard.txt          # RHCSA link test
+cat /lab/links/soft.txt          # No such file or directory
+ls -li /lab/links/               # hard.txt link count drops 2 -> 1; soft.txt shown in red (dangling)
+sudo vi /root/links_result.txt   # record the explanation (see below)
+
+# 5. Files owned by bob, full paths preserved; 2>/dev/null hides /proc noise
+sudo mkdir -p /root/bobfiles
+sudo find / -user bob -type f -exec cp --parents {} /root/bobfiles/ \; 2>/dev/null
+sudo find /root/bobfiles -type f
+
+# 6-8. bzip2 archive: -j (gzip is -z, xz is -J)
+sudo tar -cjf /root/bobfiles.tar.bz2 /root/bobfiles     # "Removing leading `/'" is normal
+sudo tar -tjf /root/bobfiles.tar.bz2 | sudo tee /root/bobfiles_list.txt
+sudo mkdir -p /root/restore
+sudo tar -xjf /root/bobfiles.tar.bz2 -C /root/restore
+
+# 9. gzip normally replaces the original; -k keeps it
+sudo cp /etc/services /root/services
+sudo gzip -k /root/services
+ls -l /root/services /root/services.gz
+```
+
+A hard link is a second directory entry for the **same inode**, so `original.txt` and `hard.txt`
+show the same inode number and a link count of 2. Deleting `original.txt` removes one name and
+drops the count to 1. The data stays until the count reaches 0, so `hard.txt` still works.
+
+A symbolic link has **its own inode** and stores only a path. Once that path is gone, the link
+is dangling. Soft links can cross file systems and point to directories. Hard links can't do either.
+
+- `find -exec ... \;` runs once per file. `cp --parents` rebuilds `data/devshare/bobfile` under
+  the target. Expect `/data/devshare/bobfile` (T9) and `/tmp/badperms` (T24) if they still exist.
+- `tar` strips the leading `/`, so the archive holds `root/bobfiles/...` and extraction creates
+  `/root/restore/root/bobfiles/...`.
+- If `tar -j` fails with `bzip2: Cannot exec`, run `dnf install bzip2`.
+- `gunzip`, `bunzip2` and `unxz` reverse the single-file compressors. Each also accepts `-k`.
+
+Expected Results:
+
+```text
+ls -li (before rm):  hard.txt and original.txt share one inode, link count 2; soft.txt has its own inode
+cat hard.txt:        RHCSA link test (after original.txt is deleted)
+cat soft.txt:        No such file or directory
+tar -tjf:            root/bobfiles/data/devshare/bobfile ...
+ls /root:            services  services.gz  bobfiles.tar.bz2  bobfiles_list.txt  restore/
 ```
 
 ---
@@ -2237,16 +2294,15 @@ getsebool -a / setsebool -P NAME on|off
 ausearch -m avc -ts recent   # check denials
 ```
 
-### Containers (RHEL 10 — Quadlets)
+### Links, find & Archives
 
 ```bash
-podman pull / run / ps / stop / rm / rmi
-podman inspect IMAGE
-podman exec -it NAME bash
-# Quadlet files: ~/.config/containers/systemd/*.container
-systemctl --user daemon-reload
-systemctl --user enable --now service-name.service
-loginctl enable-linger USERNAME
+ln TARGET LINK / ln -s TARGET LINK   # hard / symbolic
+ls -li                               # inode + link count
+find / -user NAME -type f -exec cp --parents {} DEST/ \; 2>/dev/null
+tar -czf / -cjf / -cJf ARCHIVE PATH  # gzip / bzip2 / xz
+tar -tf ARCHIVE / tar -xf ARCHIVE -C DIR
+gzip -k / bzip2 -k / xz -k FILE      # keep the original
 ```
 
 ### Systemd
@@ -2271,7 +2327,7 @@ Based on your current objective tracker, focus on:
 | 🔴 High   | Users/Groups/sudo                      | `man useradd`, `man sudoers`, `man chage`                                            |
 | 🟡 Medium | Shell scripting                        | GNU Bash manual,`man test`                                                               |
 | 🟡 Medium | NFS + AutoFS                           | `man exports`, `man auto.master`                                                       |
-| 🟡 Medium | Containers (Quadlets)                  | [Podman Quadlet Docs](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html) |
+| 🟡 Medium | Links, find, tar/compression           | `man ln`, `man find`, `man tar`                                                        |
 | 🟢 Lower  | Networking/firewalld                   | `man nmcli`, `man firewall-cmd`                                                        |
 
 ---

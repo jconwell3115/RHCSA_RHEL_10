@@ -39,8 +39,10 @@ case "$(hostname -s)" in
     chk "T33 intranet fcontext"        "ls -Zd /srv/intranet | grep -q httpd_sys_content_t"
     chk "T33 httpd serving"            "curl -sf http://localhost:8404/ | grep -q 'Echo Intranet OK'"
     chk "T34 labhttpd module loaded"   "semodule -l | grep -qx labhttpd"
-    chk "T35 linger enabled for emma"  "loginctl show-user emma -p Linger | grep -qi yes"
-    chk "T35 container serving 9191"   "curl -sf http://localhost:9191/ | grep -q 'Echo Container OK'"
+    chk "T35 Thunderbird per-user"     "test -d /home/emma/.local/share/flatpak/app/org.mozilla.Thunderbird"
+    chk "T35 not installed system-wide" "! flatpak --system list --app | grep -q Thunderbird"
+    chk "T35 dvd-user remote enabled"  "su - emma -c 'flatpak --user remotes' | grep -q dvd-user"
+    chk "T35 delete error captured"    "grep -q 'installed refs' /home/emma/fp_delete_error.txt"
     ;;
   *foxtrot*)
     chk "T1  boots clean / fstab sane" "mount -a"

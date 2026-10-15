@@ -607,33 +607,25 @@ Write `/root/health_report.sh`:
 3. Add firewall rule for port `2222/tcp` in `labzone` (persistent)
 4. Restart `sshd`, confirm it is listening on both ports
 5. Enable persistently the boolean `ssh_sysadm_login` (or `use_nfs_home_dirs` if not present) and verify
-6. Set the boolean `container_manage_cgroup` on persistently
+6. Set the boolean `httpd_can_network_connect_db` on persistently
 7. Copy `/etc/motd` to `/var/www/html/motd.txt`; observe its context is `admin_home_t` or `etc_t`; fix it so it becomes `httpd_sys_content_t`
 
 ---
 
-### SECTION 11: Containers with Podman
+### SECTION 11: Essential Tools — Text, Redirection & Archives
 
 ---
 
-**Task 35 — Rootless Container with Persistent Volume + Quadlet Timer** *(charlie, as user `emma`)*
+**Task 35 — grep, Redirection, `su -` and an xz Archive** *(charlie)*
 
-> Objective: Find/retrieve/inspect images; run containers; configure as systemd service; attach persistent storage
+> Objective: Use input-output redirection, Use grep and regular expressions to analyze text, Log in and switch users in multiuser targets, Archive, compress, unpack, and uncompress files using tar
 
-As user `emma` (rootless):
-
-1. Enable **linger** for `emma`
-2. Log in as `emma`, ensure `XDG_RUNTIME_DIR` is set
-3. Search and pull `registry.access.redhat.com/ubi10/nginx-124` (**nginx**, not httpd this time)
-4. Inspect the image; note the exposed port and the user it runs as
-5. Create a named **podman volume** `emma-nginx-data` and place an `index.html` in it containing `Emma Nginx OK`
-6. Create Quadlet **volume** and **container** files under `~/.config/containers/systemd/`:
-   - A `.volume` unit declaring the named volume
-   - A `.container` unit running the nginx image as `emma_nginx`, publishing host port `9090` to container port `8080`, mounting the volume at the nginx web root with the correct SELinux relabel flag, restarting always, and allowing a generous start timeout
-7. Reload the user daemon and start the service
-8. Test: `curl http://localhost:9090/` from `emma`
-9. **Bonus** — create a **Quadlet timer** that restarts the container every night at 03:00
-10. Reboot; verify container starts automatically without emma logging in
+1. Using a **single** `grep -E` with an anchored regex, extract the `/etc/passwd` lines for UIDs `2100`–`2103` into `/root/exam_users.txt`. No other lines may match.
+2. Append (do not overwrite) the output of `date` to `/root/exam_users.txt`
+3. Save only the **active** lines of `/etc/ssh/sshd_config` (no comments, no blank lines) to `/root/sshd_active.txt`
+4. Switch to `emma` with a **login shell**. As `emma`, run `find /etc -name '*.conf'`, sending the paths found to `~/conf_list.txt` and the error messages to `~/conf_errors.txt`. Nothing may print to the terminal.
+5. As `root`, create an **xz**-compressed archive `/root/sshconf.tar.xz` of `/etc/ssh`
+6. Extract **only** `sshd_config` from the archive into `/root/restore/`
 
 ---
 
@@ -675,7 +667,7 @@ As user `emma` (rootless):
 | 32 | Health report + trap + rotation cron              |     ✓     | [ ] |
 | 33 | SELinux fcontext for custom DocumentRoot          |     ✓     | [ ] |
 | 34 | SELinux port label 2222 + booleans                |     ✓     | [ ] |
-| 35 | Rootless nginx Quadlet + timer + linger           |     ✓     | [ ] |
+| 35 | grep -E + redirection + su - + tar.xz             |     ✓     | [ ] |
 
 **Score: ___ / 35**
 **Passing threshold (~70%): 25 / 35**
@@ -753,7 +745,13 @@ case "$(hostname -s)" in
     chk "T34 port 2222 labeled"         "semanage port -l | grep ssh_port_t | grep -q 2222"
     chk "T34 sshd on 2222"              "ss -tlnp | grep -q ':2222'"
     chk "T34 labzone has 2222"          "firewall-cmd --zone=labzone --list-ports | grep -q 2222"
-    chk "T34 container_manage_cgroup"   "getsebool container_manage_cgroup | grep -q ' on$'"
+    chk "T34 httpd_can_network_connect_db" "getsebool httpd_can_network_connect_db | grep -q ' on$'"
+    chk "T35 exam_users has 4 UIDs"     "test \$(grep -cE ':210[0-3]:' /root/exam_users.txt) -eq 4"
+    chk "T35 sshd_active no comments"   "test -s /root/sshd_active.txt && ! grep -qE '^\\s*(#|$)' /root/sshd_active.txt"
+    chk "T35 emma owns conf_list"       "stat -c '%U' /srv/users/emma/conf_list.txt | grep -qx emma"
+    chk "T35 conf_errors captured"      "test -s /srv/users/emma/conf_errors.txt"
+    chk "T35 tar.xz has sshd_config"    "tar -tJf /root/sshconf.tar.xz | grep -q sshd_config"
+    chk "T35 sshd_config restored"      "test -f /root/restore/etc/ssh/sshd_config"
     ;;
   *delta*)
     chk "T2  default graphical"         "systemctl get-default | grep -qx graphical.target"
@@ -1022,53 +1020,39 @@ firewall-cmd --permanent --zone=labzone --add-port=2222/tcp
 firewall-cmd --reload
 ss -tlnp | grep -E ':22|:2222'
 getsebool ssh_sysadm_login
-setsebool -P container_manage_cgroup on
+setsebool -P httpd_can_network_connect_db on
 restorecon -v /var/www/html/motd.txt
 ```
 
 ---
 
-### Section 11 — Containers
+### Section 11 — Essential Tools
 
-**T35 — Quadlet volume + container**
-
-`~/.config/containers/systemd/emma-nginx.volume`:
-
-```ini
-[Volume]
-VolumeName=emma-nginx-data
-```
-
-`~/.config/containers/systemd/emma-nginx.container`:
-
-```ini
-[Unit]
-Description=Emma Nginx Web
-Wants=network-online.target
-After=network-online.target
-
-[Container]
-Image=registry.access.redhat.com/ubi10/nginx-124
-ContainerName=emma_nginx
-PublishPort=9090:8080
-Volume=emma-nginx-data:/opt/app-root/src:Z
-
-[Service]
-Restart=always
-TimeoutStartSec=180
-
-[Install]
-WantedBy=default.target
-```
+**T35 — grep, redirection, su -, xz archive**
 
 ```bash
-loginctl enable-linger emma
-podman run --rm -v emma-nginx-data:/data ubi10/nginx-124 \
-  sh -c 'echo "Emma Nginx OK" > /data/index.html'
-systemctl --user daemon-reload
-systemctl --user start emma-nginx.service
-curl http://localhost:9090/
+# 1. Anchored: field 3 (UID) must be exactly 2100-2103
+grep -E '^[^:]+:[^:]*:210[0-3]:' /etc/passwd > /root/exam_users.txt
+# 2. >> appends; > would truncate
+date >> /root/exam_users.txt
+# 3. -v inverts: drop comment lines (optionally indented) and empty lines
+grep -Ev '^[[:space:]]*(#|$)' /etc/ssh/sshd_config > /root/sshd_active.txt
+# 4. su - = login shell: emma's HOME, PATH and cwd (/srv/users/emma)
+su - emma
+find /etc -name '*.conf' > ~/conf_list.txt 2> ~/conf_errors.txt
+ls -l ~/conf_*.txt
+exit
+# 5-6. -J = xz; name the member to extract just that file
+tar -cJf /root/sshconf.tar.xz /etc/ssh
+tar -tJf /root/sshconf.tar.xz | grep sshd_config
+mkdir -p /root/restore
+tar -xJf /root/sshconf.tar.xz -C /root/restore etc/ssh/sshd_config
 ```
+
+`grep -E '210[0-3]'` without anchors also matches a GID or a home path containing `2100`. Anchor
+on the field separators. Plain `su emma` keeps root's environment and working directory, so `~`
+may not expand to emma's home. The member name has **no leading slash** (`etc/ssh/sshd_config`)
+because `tar` stripped it at creation.
 
 ---
 
@@ -1116,12 +1100,13 @@ curl http://localhost:9090/
         PasswordAuthentication no
         AuthenticationMethods publickey
 
-### Podman Quadlet
+### Text tools & archives
 
-    loginctl enable-linger USER
-    systemctl --user daemon-reload
-    systemctl --user start service-name.service
-    journalctl --user -u service-name.service
+    grep -E '^[^:]+:[^:]*:210[0-3]:' /etc/passwd
+    grep -Ev '^[[:space:]]*(#|$)' FILE        # active config lines only
+    CMD > out 2> err  /  CMD >> out  /  CMD &> both
+    su - USER                                 # login shell
+    tar -cJf A.tar.xz DIR ; tar -xJf A.tar.xz -C DEST path/in/archive
 
 ---
 
@@ -1140,7 +1125,7 @@ curl http://localhost:9090/
 | Permissions   | ugo/rwx + setgid        | **ACLs** (default + access)                           |
 | SSH           | Simple key auth         | **`Match User`** + no-pw for specific user          |
 | Repos         | One file, gpgcheck=0    | **Two files**, GPG import, priorities                 |
-| Flatpak       | Not covered             | **Flathub remote + install**                          |
+| Flatpak       | DVD sideload, system-wide | **Flathub remote + install**                        |
 | RPM           | Install/verify          | **`rpm -V` after tampering + reinstall**            |
 | NFS           | v3/v4                   | **v4 only** + disable v3                              |
 | AutoFS        | Direct + indirect       | **Wildcard indirect** + timeout + ghost               |
@@ -1148,7 +1133,7 @@ curl http://localhost:9090/
 | Cron/Timer    | Hourly timer            | **3-hour timer + Persistent=true**                    |
 | Scripting     | `if/elif`             | **`case` + `while read` CSV parsing + `trap`**  |
 | SELinux       | httpd default root      | httpd**custom root** + **port 2222**            |
-| Containers    | httpd Quadlet           | **nginx** rootless + **volume Quadlet** + timer |
+| Essential tools | Links + find + tar.bz2 | **`grep -E` regex** + stdout/stderr split + `su -` + **tar.xz member extract** |
 
 ---
 

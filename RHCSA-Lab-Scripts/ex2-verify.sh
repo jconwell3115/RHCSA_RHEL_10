@@ -64,7 +64,13 @@ case "$(hostname -s)" in
     chk "T34 port 2222 labeled"         "semanage port -l | grep ssh_port_t | grep -q 2222"
     chk "T34 sshd on 2222"              "ss -tlnp | grep -q ':2222'"
     chk "T34 labzone has 2222"          "firewall-cmd --zone=labzone --list-ports | grep -q 2222"
-    chk "T34 container_manage_cgroup"   "getsebool container_manage_cgroup | grep -q ' on$'"
+    chk "T34 httpd_can_network_connect_db" "getsebool httpd_can_network_connect_db | grep -q ' on$'"
+    chk "T35 exam_users has 4 UIDs"     "test \$(grep -cE ':210[0-3]:' /root/exam_users.txt) -eq 4"
+    chk "T35 sshd_active no comments"   "test -s /root/sshd_active.txt && ! grep -qE '^\\s*(#|$)' /root/sshd_active.txt"
+    chk "T35 emma owns conf_list"       "stat -c '%U' /srv/users/emma/conf_list.txt | grep -qx emma"
+    chk "T35 conf_errors captured"      "test -s /srv/users/emma/conf_errors.txt"
+    chk "T35 tar.xz has sshd_config"    "tar -tJf /root/sshconf.tar.xz | grep -q sshd_config"
+    chk "T35 sshd_config restored"      "test -f /root/restore/etc/ssh/sshd_config"
     ;;
   *delta*)
     chk "T2  default graphical"         "systemctl get-default | grep -qx graphical.target"

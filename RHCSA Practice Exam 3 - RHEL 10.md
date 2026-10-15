@@ -16,10 +16,10 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 
 > **⏱️ This is a 4-hour paper, not a 2.5-hour one.** Tasks 7, 9, 10 and 27 each have six or seven sub-answers to capture, and Tasks 1, 4 and 33 are open-ended diagnosis with no hint of the cause. Splitting into two timed sittings (Sections 1–6, then 7–11) is the better drill. **Do not read a timer overrun here as "not ready"** — the real EX200 presents far fewer, larger tasks.
 >
-> **First cold run: expect 15–20 / 35.** Twenty-six of these tasks cover material Exams 1 and 2 never touched. A low first score is the diagnostic working, not a failure.
+> **First cold run: expect 15–20 / 35.** Twenty-six of these tasks cover objectives or scenarios Exams 1 and 2 never touched. A low first score is the diagnostic working, not a failure.
 
 > **⚠️ This exam is deliberately different from Exams 1 and 2.**
-> Roughly two-thirds of these tasks cover EX200 objectives that Exams 1 and 2 **never tested** — I/O redirection, `grep`/regex, `tar`/archives, system documentation, `skopeo`, SELinux violation *diagnosis*, service failure diagnosis, and unbootable-system recovery. The rest re-test core objectives through tools and angles you haven't used yet (`grubby`, `systemctl edit`, `dnf history`, `sfdisk` table dumps, LVM **shrink**, bind mounts, `/etc/cron.d`).
+> Roughly two-thirds of these tasks cover EX200 objectives that Exams 1 and 2 **barely touch or never test** — I/O redirection, `grep`/regex, `tar`/archives, system documentation, per-user Flatpak, SELinux violation *diagnosis*, service failure diagnosis, and unbootable-system recovery. The rest re-test core objectives through tools and angles you haven't used yet (`grubby`, `systemctl edit`, `dnf history`, `sfdisk` table dumps, LVM **shrink**, bind mounts, `/etc/cron.d`).
 >
 > **No hints or solutions appear beside the tasks.** The full answer key lives in a single section at the end. Exams 1 and 2 trained recognition; this one trains recall.
 
@@ -243,7 +243,7 @@ Without editing the vendor-supplied unit file, override `sshd.service`:
 
 ### SECTION 2: Essential Tools
 
-> This entire section covers EX200 objectives that Exams 1 and 2 never tested.
+> Exams 1 and 2 touch these objectives only lightly, mainly in Exam 1 T35 and Exam 2 T35. This section drills them in depth.
 
 ---
 
@@ -624,26 +624,20 @@ Write `/usr/local/bin/userreport.sh` that produces a report at `/var/log/userrep
 
 ---
 
-### SECTION 11: Containers
+### SECTION 11: Flatpak
 
 ---
 
-**Task 35 — Registry Tooling and a Self-Updating Rootless Container** *(echo, as user `emma`)*
+**Task 35 — Per-User Flatpak From the DVD** *(echo, as user `emma`)*
 
-1. As `root`, ensure `podman` and `skopeo` are installed and enable **lingering** for `emma`
-2. As `emma`, use **`skopeo`** — not `podman` — to inspect `docker://registry.access.redhat.com/ubi10/ubi:latest` and record the image digest and available labels `[/home/emma/skopeo_inspect.txt]`
-3. Use `skopeo` to list the available tags for that repository `[/home/emma/skopeo_tags.txt]`
-4. Authenticate to `registry.redhat.io` with `podman login` and record where the credentials file is stored `[/home/emma/auth_path.txt]` *(if offline, document the exact command and expected path instead)*
-5. Create a podman volume `emma-site` and place an `index.html` in it containing `Echo Container OK`
-6. Create a **Quadlet** at `~/.config/containers/systemd/emma-site.container` that:
-   - runs `registry.access.redhat.com/ubi10/httpd-24`
-   - publishes host port `9191` to the container's HTTP port
-   - mounts the `emma-site` volume at the web root with the correct SELinux relabel flag
-   - sets the environment variable `LAB_ENV=exam3`
-   - enables **automatic image updates** from the registry
-7. Start the service, verify with `curl http://localhost:9191/`
-8. Enable the rootless timer that performs automatic updates
-9. Reboot and confirm the container starts with no login from `emma`
+1. As `root`, ensure `flatpak` is installed. Do **not** add any system-wide remote.
+2. As `emma`, with no `sudo`, configure a **per-user** remote named `dvd-user` and use it to install `org.mozilla.Thunderbird` from the Flatpak images on the DVD mounted at `/mnt/dvd`. Thunderbird must go into emma's installation only, not the system one.
+3. Record the on-disk location of emma's Thunderbird install `[/home/emma/fp_location.txt]`
+4. List only the **runtimes** in emma's installation `[/home/emma/fp_runtimes.txt]`
+5. As `root`, list the **system-wide** installed apps, showing Thunderbird is not among them `[/root/fp_system.txt]`
+6. As `emma`, **disable** `dvd-user` without deleting it. Show that a plain remote listing no longer includes it, then list it with the option that does `[/home/emma/fp_disabled.txt]`
+7. Try to **delete** `dvd-user` while Thunderbird is still installed. Decline any prompt and capture the error `[/home/emma/fp_delete_error.txt]`
+8. Re-enable `dvd-user` and leave Thunderbird installed for grading
 
 ---
 
@@ -685,7 +679,7 @@ Write `/usr/local/bin/userreport.sh` that produces a report at `/var/log/userrep
 | 32 | Text-processing report script                     |    ★    |      —      | [ ] |
 | 33 | **Diagnose** SELinux denials unaided              |    ★    |      ✓      | [ ] |
 | 34 | Build/install local policy module                 |    ★    |      ✓      | [ ] |
-| 35 | skopeo + podman login + AutoUpdate Quadlet        |    ★    |      ✓      | [ ] |
+| 35 | Per-user Flatpak + remote disable/delete guard    |    ★    |      ✓      | [ ] |
 
 **Score: ___ / 35**  ·  **Pass: 25 / 35**  ·  ★ = objective or scenario untested by Exams 1 & 2 (**26 of 35**)
 
@@ -737,8 +731,10 @@ case "$(hostname -s)" in
     chk "T33 intranet fcontext"        "ls -Zd /srv/intranet | grep -q httpd_sys_content_t"
     chk "T33 httpd serving"            "curl -sf http://localhost:8404/ | grep -q 'Echo Intranet OK'"
     chk "T34 labhttpd module loaded"   "semodule -l | grep -qx labhttpd"
-    chk "T35 linger enabled for emma"  "loginctl show-user emma -p Linger | grep -qi yes"
-    chk "T35 container serving 9191"   "curl -sf http://localhost:9191/ | grep -q 'Echo Container OK'"
+    chk "T35 Thunderbird per-user"     "test -d /home/emma/.local/share/flatpak/app/org.mozilla.Thunderbird"
+    chk "T35 not installed system-wide" "! flatpak --system list --app | grep -q Thunderbird"
+    chk "T35 dvd-user remote enabled"  "su - emma -c 'flatpak --user remotes' | grep -q dvd-user"
+    chk "T35 delete error captured"    "grep -q 'installed refs' /home/emma/fp_delete_error.txt"
     ;;
   *foxtrot*)
     chk "T1  boots clean / fstab sane" "mount -a"
@@ -1574,58 +1570,52 @@ Never install an `audit2allow` module without reading the generated `.te` — it
 
 ---
 
-### Section 11 — Containers
+### Section 11 — Flatpak
 
-**T35 — skopeo, login, AutoUpdate Quadlet**
+**T35 — Per-user Flatpak, remote disable and delete guard**
 
 ```bash
 # as root
-sudo dnf install -y podman skopeo
-sudo loginctl enable-linger emma
+sudo dnf install -y flatpak
+flatpak --system remotes            # empty: leave it that way
 ```
 
 ```bash
-# as emma
-skopeo inspect docker://registry.access.redhat.com/ubi10/ubi:latest > ~/skopeo_inspect.txt
-skopeo list-tags docker://registry.access.redhat.com/ubi10/ubi     > ~/skopeo_tags.txt
+# as emma (su - emma), no sudo anywhere
+flatpak --user remote-add --if-not-exists --no-gpg-verify dvd-user oci+http://127.0.0.1:1
+flatpak --user install -y --sideload-repo=oci:/mnt/dvd/Flatpaks dvd-user org.mozilla.Thunderbird
 
-podman login registry.redhat.io
-echo "${XDG_RUNTIME_DIR}/containers/auth.json" > ~/auth_path.txt
+flatpak --user info --show-location org.mozilla.Thunderbird > ~/fp_location.txt
+flatpak --user list --runtime > ~/fp_runtimes.txt
 
-podman volume create emma-site
-podman run --rm -v emma-site:/data registry.access.redhat.com/ubi10/ubi \
-  sh -c 'echo "Echo Container OK" > /data/index.html'
+flatpak --user remote-modify --disable dvd-user
+flatpak --user remotes                                     # dvd-user is gone from this list
+flatpak --user remotes --show-disabled -d > ~/fp_disabled.txt
 
-mkdir -p ~/.config/containers/systemd
-cat > ~/.config/containers/systemd/emma-site.container <<'EOF'
-[Unit]
-Description=Emma Site
-Wants=network-online.target
-After=network-online.target
+echo n | flatpak --user remote-delete dvd-user 2> ~/fp_delete_error.txt
+cat ~/fp_delete_error.txt   # error: Can't remove remote 'dvd-user' with installed refs
 
-[Container]
-Image=registry.access.redhat.com/ubi10/httpd-24
-ContainerName=emma_site
-PublishPort=9191:8080
-Volume=emma-site:/var/www/html:Z
-Environment=LAB_ENV=exam3
-AutoUpdate=registry
-
-[Service]
-Restart=always
-
-[Install]
-WantedBy=default.target
-EOF
-
-systemctl --user daemon-reload
-systemctl --user start emma-site.service
-curl http://localhost:9191/
-
-systemctl --user enable --now podman-auto-update.timer
+flatpak --user remote-modify --enable dvd-user
 ```
 
-Rootless credentials live in `${XDG_RUNTIME_DIR}/containers/auth.json` (root's are in `/run/containers/0/auth.json`). `AutoUpdate=registry` plus `podman-auto-update.timer` is what makes the container refresh itself. Quadlet files are **not** enabled with `systemctl --user enable` — the generator creates the unit from the `[Install]` section at `daemon-reload`; you `start` it.
+```bash
+# as root
+flatpak --system list --app > /root/fp_system.txt         # no Thunderbird
+```
+
+- **Installation scope:** `--user` writes to `~/.local/share/flatpak/` and needs no privileges.
+  `--system` (the default when run as root) writes to `/var/lib/flatpak/`. The location file
+  should show a path under `/home/emma/.local/share/flatpak/app/org.mozilla.Thunderbird/`.
+- **Runtime:** `com.redhat.Platform` lands in emma's installation as well, because the system
+  installation has no copy to share.
+- **Why the dummy remote URL:** the remote only gives flatpak a name to install from.
+  `--sideload-repo=oci:/mnt/dvd/Flatpaks` supplies the images. Exam 1 T15 explains why
+  `flatpak install oci:...` fails on the DVD's untagged images.
+- **Disabled vs deleted:** a disabled remote stays in the config but is hidden from
+  `flatpak remotes` until you add `--show-disabled`.
+- **Delete guard:** `remote-delete` refuses while refs installed from that remote remain.
+  It offers to remove them, `echo n` declines, and `--force` would orphan them.
+- **Undo:** `flatpak --user uninstall --all`, then `remote-delete`.
 
 ---
 
@@ -1636,7 +1626,7 @@ Rootless credentials live in `${XDG_RUNTIME_DIR}/containers/auth.json` (root's a
 | Boot recovery | Reset a forgotten password | **Repair an unbootable system** with the password also unknown |
 | Boot targets | `set-default` | **One-shot GRUB target** + `grubby` for kernel args |
 | Services | Start/enable working units | **Diagnose a failing unit**; **drop-in overrides** |
-| Essential tools | Never tested | **Redirection, grep/regex, find, tar/bzip2, man/info** |
+| Essential tools | One task each: links/find/tar.bz2 (Ex1), grep/redirection/tar.xz (Ex2) | **Full section: redirection, grep/regex, find, tar/bzip2, man/info** |
 | sudo | Aliases, NOPASSWD | **`Defaults`**: timestamps, logfile, secure_path |
 | ACLs | Set entries | **Mask semantics** + effective permissions |
 | SELinux contexts | Set and restore | **`cp` vs `mv`** inheritance, `--preserve=context` |
@@ -1653,7 +1643,7 @@ Rootless credentials live in `${XDG_RUNTIME_DIR}/containers/auth.json` (root's a
 | Kernel tunables | Via tuned | **`/etc/sysctl.d/` drop-ins** |
 | Scheduling | at, cron, timers | **`at.allow`**, `at -c`, **`/etc/cron.d` user field** |
 | Scripting | if/case/for/while | **strict mode + meaningful exit codes**, text processing |
-| Containers | podman + Quadlet | **skopeo**, **`podman login`**, **`AutoUpdate=registry`** |
+| Flatpak | System-wide install from DVD (Ex1) / Flathub (Ex2) | **Per-user** install, **disable vs delete** remote, delete guard |
 
 ---
 
@@ -1672,7 +1662,7 @@ The delayed exam date turns the biggest weakness in this practice set — that E
 **If a week gets eaten** (travel, work, family), collapse to this priority order:
 
 1. **Tasks 1, 4, 33** — recovery and diagnosis. Highest-value, least-practiced, and what turns a bad exam day around.
-2. **Section 2 (Tasks 6–10)** — six listed objectives you have never drilled. Fast to complete, cheap to fix.
+2. **Section 2 (Tasks 6–10)** — six listed objectives the other exams only touch in a single task. Fast to complete, cheap to fix.
 3. **Tasks 14, 21, 22, 24** — the storage and SELinux traps most likely to cost you a whole task.
 4. Everything else as reinforcement.
 
