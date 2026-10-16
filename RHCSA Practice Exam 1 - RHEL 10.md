@@ -638,43 +638,43 @@ Schedule this script to run at **11:30 PM every night except Sunday** using cron
 
 Mark each task after verifying it survives a reboot where applicable.
 
-| #  | Task                                      | Reboot Test | Done |
-| -- | ----------------------------------------- | ----------- | ---- |
-| 1  | Break into bravo, reset root password     | ✓          | [ ]  |
+| #  | Task                                       | Reboot Test | Done |
+| -- | ------------------------------------------ | ----------- | ---- |
+| 1  | Break into bravo, reset root password      | ✓          | [ ]  |
 | 2  | Default target multi-user + clean poweroff | ✓          | [ ]  |
-| 3  | Modify bootloader (GRUB_TIMEOUT, quiet)   | ✓          | [ ]  |
-| 4  | Static IP + IPv6 + hostname + /etc/hosts  | ✓          | [ ]  |
-| 5  | Firewall rules (SSH, HTTP, ports)         | ✓          | [ ]  |
-| 6  | Create users/groups with UIDs/GIDs        | ✓          | [ ]  |
-| 7  | Password aging policies                   | ✓          | [ ]  |
-| 8  | sudo access (groups, command alias)       | ✓          | [ ]  |
-| 9  | Set-GID collaborative directory           | ✓          | [ ]  |
-| 10 | System-wide umask 0007                    | ✓          | [ ]  |
-| 11 | Key-based SSH (root + alice)              | ✓          | [ ]  |
-| 12 | scp, rsync, sftp transfers                | —          | [ ]  |
-| 13 | Configure local DNF repo from ISO         | ✓          | [ ]  |
-| 14 | Package install/remove/query/update      | —          | [ ]  |
-| 15 | Package groups + Flatpak + versioned RPM  | —          | [ ]  |
-| 16 | GPT partitions on /dev/vdb                | ✓          | [ ]  |
-| 17 | Format + mount by UUID and LABEL          | ✓          | [ ]  |
-| 18 | Swap partition with priority              | ✓          | [ ]  |
-| 19 | Create LVM (PV, VG, LV) with PE size      | ✓          | [ ]  |
-| 20 | Extend LV and grow filesystem live        | ✓          | [ ]  |
-| 21 | NFS server with exports + firewall        | ✓          | [ ]  |
-| 22 | NFS client persistent mount               | ✓          | [ ]  |
-| 23 | AutoFS (direct map + indirect home dirs)  | ✓          | [ ]  |
-| 24 | File permission diagnostics + fix         | ✓          | [ ]  |
-| 25 | Chrony NTP + timezone                     | ✓          | [ ]  |
-| 26 | Tuned profile + custom merged profile     | ✓          | [ ]  |
-| 27 | Process management (nice/renice/kill)     | —          | [ ]  |
-| 28 | Persistent journal + rsyslog rule         | ✓          | [ ]  |
-| 29 | at + cron + systemd timer                 | ✓          | [ ]  |
-| 30 | Conditional shell script (syscheck.sh)    | —          | [ ]  |
-| 31 | Looping user creation script              | —          | [ ]  |
-| 32 | Backup script + cron job                  | ✓          | [ ]  |
-| 33 | SELinux modes + fcontext + restorecon     | ✓          | [ ]  |
-| 34 | SELinux ports + booleans                  | ✓          | [ ]  |
-| 35 | Hard/soft links + find + tar.bz2 + gzip   | ✓          | [ ]  |
+| 3  | Modify bootloader (GRUB_TIMEOUT, quiet)    | ✓          | [ ]  |
+| 4  | Static IP + IPv6 + hostname + /etc/hosts   | ✓          | [ ]  |
+| 5  | Firewall rules (SSH, HTTP, ports)          | ✓          | [ ]  |
+| 6  | Create users/groups with UIDs/GIDs         | ✓          | [ ]  |
+| 7  | Password aging policies                    | ✓          | [ ]  |
+| 8  | sudo access (groups, command alias)        | ✓          | [ ]  |
+| 9  | Set-GID collaborative directory            | ✓          | [ ]  |
+| 10 | System-wide umask 0007                     | ✓          | [ ]  |
+| 11 | Key-based SSH (root + alice)               | ✓          | [ ]  |
+| 12 | scp, rsync, sftp transfers                 | —          | [ ]  |
+| 13 | Configure local DNF repo from ISO          | ✓          | [ ]  |
+| 14 | Package install/remove/query/update        | —          | [ ]  |
+| 15 | Package groups + Flatpak + versioned RPM   | —          | [ ]  |
+| 16 | GPT partitions on /dev/vdb                 | ✓          | [ ]  |
+| 17 | Format + mount by UUID and LABEL           | ✓          | [ ]  |
+| 18 | Swap partition with priority               | ✓          | [ ]  |
+| 19 | Create LVM (PV, VG, LV) with PE size       | ✓          | [ ]  |
+| 20 | Extend LV and grow filesystem live         | ✓          | [ ]  |
+| 21 | NFS server with exports + firewall         | ✓          | [ ]  |
+| 22 | NFS client persistent mount                | ✓          | [ ]  |
+| 23 | AutoFS (direct map + indirect home dirs)   | ✓          | [ ]  |
+| 24 | File permission diagnostics + fix          | ✓          | [ ]  |
+| 25 | Chrony NTP + timezone                      | ✓          | [ ]  |
+| 26 | Tuned profile + custom merged profile      | ✓          | [ ]  |
+| 27 | Process management (nice/renice/kill)      | —          | [ ]  |
+| 28 | Persistent journal + rsyslog rule          | ✓          | [ ]  |
+| 29 | at + cron + systemd timer                  | ✓          | [ ]  |
+| 30 | Conditional shell script (syscheck.sh)     | —          | [ ]  |
+| 31 | Looping user creation script               | —          | [ ]  |
+| 32 | Backup script + cron job                   | ✓          | [ ]  |
+| 33 | SELinux modes + fcontext + restorecon      | ✓          | [ ]  |
+| 34 | SELinux ports + booleans                   | ✓          | [ ]  |
+| 35 | Hard/soft links + find + tar.bz2 + gzip    | ✓          | [ ]  |
 
 **Score: ___ / 35**
 
@@ -2217,13 +2217,13 @@ sudo ln /lab/links/original.txt /lab/links/hard.txt
 sudo ln -s /lab/links/original.txt /lab/links/soft.txt
 
 # 3. -i adds the inode column
-ls -li /lab/links/ | sudo tee /root/inodes.txt
+sudo ls -li /lab/links/ | sudo tee /root/inodes.txt
 
 # 4. Delete the original and test both links
 sudo rm /lab/links/original.txt
-cat /lab/links/hard.txt          # RHCSA link test
-cat /lab/links/soft.txt          # No such file or directory
-ls -li /lab/links/               # hard.txt link count drops 2 -> 1; soft.txt shown in red (dangling)
+sudo cat /lab/links/hard.txt          # RHCSA link test
+sudo cat /lab/links/soft.txt          # No such file or directory
+sudo ls -li /lab/links/               # hard.txt link count drops 2 -> 1; soft.txt shown in red (dangling)
 sudo vi /root/links_result.txt   # record the explanation (see below)
 
 # 5. Files owned by bob, full paths preserved; 2>/dev/null hides /proc noise
@@ -2240,7 +2240,7 @@ sudo tar -xjf /root/bobfiles.tar.bz2 -C /root/restore
 # 9. gzip normally replaces the original; -k keeps it
 sudo cp /etc/services /root/services
 sudo gzip -k /root/services
-ls -l /root/services /root/services.gz
+sudo ls -l /root/services /root/services.gz
 ```
 
 A hard link is a second directory entry for the **same inode**, so `original.txt` and `hard.txt`
@@ -2320,15 +2320,15 @@ systemctl get-default / set-default
 
 Based on your current objective tracker, focus on:
 
-| Priority  | Topic                                  | Resource                                                                                   |
-| --------- | -------------------------------------- | ------------------------------------------------------------------------------------------ |
-| 🔴 High   | Storage (LVM, partitions, filesystems) | `man lvm`, `man fstab`, Sander van Vugt RHCSA 9                                        |
-| 🔴 High   | SELinux                                | `man semanage`, `man restorecon`, audit2why                                            |
-| 🔴 High   | Users/Groups/sudo                      | `man useradd`, `man sudoers`, `man chage`                                            |
-| 🟡 Medium | Shell scripting                        | GNU Bash manual,`man test`                                                               |
-| 🟡 Medium | NFS + AutoFS                           | `man exports`, `man auto.master`                                                       |
-| 🟡 Medium | Links, find, tar/compression           | `man ln`, `man find`, `man tar`                                                        |
-| 🟢 Lower  | Networking/firewalld                   | `man nmcli`, `man firewall-cmd`                                                        |
+| Priority  | Topic                                  | Resource                                            |
+| --------- | -------------------------------------- | --------------------------------------------------- |
+| 🔴 High   | Storage (LVM, partitions, filesystems) | `man lvm`, `man fstab`, Sander van Vugt RHCSA 9 |
+| 🔴 High   | SELinux                                | `man semanage`, `man restorecon`, audit2why     |
+| 🔴 High   | Users/Groups/sudo                      | `man useradd`, `man sudoers`, `man chage`     |
+| 🟡 Medium | Shell scripting                        | GNU Bash manual,`man test`                        |
+| 🟡 Medium | NFS + AutoFS                           | `man exports`, `man auto.master`                |
+| 🟡 Medium | Links, find, tar/compression           | `man ln`, `man find`, `man tar`               |
+| 🟢 Lower  | Networking/firewalld                   | `man nmcli`, `man firewall-cmd`                 |
 
 ---
 
