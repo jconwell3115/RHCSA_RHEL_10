@@ -5,7 +5,6 @@ created: 2026-07-08
 restructured: 2026-09-09 - answer key moved to bottom for cold re-runs
 note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading Checklist during a timed run.
 ---
-
 # 🧪 RHCSA Practice Exam #2 — RHEL 10 (EX200)
 
 > **Format:** Performance-based | **Time budget:** 3 hours | **Pass Score:** ~70% (25 / 35)
@@ -70,7 +69,7 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 
 > Objective: Interrupt the boot process in order to gain access to a system
 
-The root password on `rhel10-charlie` is unknown. This time, use the **`init=/bin/bash`** method (not `rd.break`) to recover:
+The root password on `rhel10-charlie` is unknown. Use the **`init=/bin/bash`** method (not `rd.break`) to recover:
 
 1. Interrupt GRUB, edit the kernel line, replace `ro` with `rw` and append `init=/bin/bash`
 2. Boot to a raw bash shell
@@ -1112,28 +1111,28 @@ because `tar` stripped it at creation.
 
 ## 📚 Delta from Exam #1 — What This Exam Emphasizes
 
-| Area          | Exam#1 approach         | Exam#2 approach                                             |
-| ------------- | ----------------------- | ----------------------------------------------------------- |
-| Root recovery | `rd.break`            | `init=/bin/bash`                                          |
-| Boot target   | graphical → multi-user | rescue → graphical                                         |
-| Partitions    | `fdisk` interactive   | `parted -s` scripted                                      |
-| Filesystems   | XFS + ext4              | XFS +**VFAT** + noexec/nodev/nosuid                   |
-| Swap          | Partition               | **Swap file**                                         |
-| LVM           | Linear LVs              | **Striped LV**, `pvmove`, `vgreduce`              |
-| Firewall      | Services in`public`   | **Custom zone** + rich rule + default zone            |
-| Sudo          | Group NOPASSWD          | **User_Alias + Cmnd_Alias** + PAM pwquality           |
-| Permissions   | ugo/rwx + setgid        | **ACLs** (default + access)                           |
-| SSH           | Simple key auth         | **`Match User`** + no-pw for specific user          |
-| Repos         | One file, gpgcheck=0    | **Two files**, GPG import, priorities                 |
-| Flatpak       | DVD sideload, system-wide | **Flathub remote + install**                        |
-| RPM           | Install/verify          | **`rpm -V` after tampering + reinstall**            |
-| NFS           | v3/v4                   | **v4 only** + disable v3                              |
-| AutoFS        | Direct + indirect       | **Wildcard indirect** + timeout + ghost               |
-| Tuned         | Custom merged           | **Custom profile inheriting**                         |
-| Cron/Timer    | Hourly timer            | **3-hour timer + Persistent=true**                    |
-| Scripting     | `if/elif`             | **`case` + `while read` CSV parsing + `trap`**  |
-| SELinux       | httpd default root      | httpd**custom root** + **port 2222**            |
-| Essential tools | Links + find + tar.bz2 | **`grep -E` regex** + stdout/stderr split + `su -` + **tar.xz member extract** |
+| Area            | Exam#1 approach           | Exam#2 approach                                                                                |
+| --------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
+| Root recovery   | `rd.break`              | `init=/bin/bash`                                                                             |
+| Boot target     | graphical → multi-user   | rescue → graphical                                                                            |
+| Partitions      | `fdisk` interactive     | `parted -s` scripted                                                                         |
+| Filesystems     | XFS + ext4                | XFS +**VFAT** + noexec/nodev/nosuid                                                      |
+| Swap            | Partition                 | **Swap file**                                                                            |
+| LVM             | Linear LVs                | **Striped LV**, `pvmove`, `vgreduce`                                                 |
+| Firewall        | Services in`public`     | **Custom zone** + rich rule + default zone                                               |
+| Sudo            | Group NOPASSWD            | **User_Alias + Cmnd_Alias** + PAM pwquality                                              |
+| Permissions     | ugo/rwx + setgid          | **ACLs** (default + access)                                                              |
+| SSH             | Simple key auth           | **`Match User`** + no-pw for specific user                                             |
+| Repos           | One file, gpgcheck=0      | **Two files**, GPG import, priorities                                                    |
+| Flatpak         | DVD sideload, system-wide | **Flathub remote + install**                                                             |
+| RPM             | Install/verify            | **`rpm -V` after tampering + reinstall**                                               |
+| NFS             | v3/v4                     | **v4 only** + disable v3                                                                 |
+| AutoFS          | Direct + indirect         | **Wildcard indirect** + timeout + ghost                                                  |
+| Tuned           | Custom merged             | **Custom profile inheriting**                                                            |
+| Cron/Timer      | Hourly timer              | **3-hour timer + Persistent=true**                                                       |
+| Scripting       | `if/elif`               | **`case` + `while read` CSV parsing + `trap`**                                     |
+| SELinux         | httpd default root        | httpd**custom root** + **port 2222**                                               |
+| Essential tools | Links + find + tar.bz2    | **`grep -E` regex** + stdout/stderr split + `su -` + **tar.xz member extract** |
 
 ---
 
