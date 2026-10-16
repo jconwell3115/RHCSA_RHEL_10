@@ -381,7 +381,7 @@ All three exams need multiple raw disks attached unpartitioned. The helper ships
 
 ```bash
 # adjust to wherever you cloned the repo
-export RHCSA_SCRIPTS="$HOME/Repositories/obsidian_vault/Shared_Vault/Obsidian_Vault/Certifications/RHCSA-Lab-Scripts"
+export RHCSA_SCRIPTS="$HOME/Work_Environments/RHCSA_Study/RHCSA_RHEL_10/RHCSA-Lab-Scripts"
 chmod +x "$RHCSA_SCRIPTS"/*.sh
 ```
 
