@@ -55,14 +55,12 @@ sudo "${ADDDISK}" rhel10-echo    vdb 8
 sudo "${ADDDISK}" rhel10-echo    vdc 6
 sudo "${ADDDISK}" rhel10-foxtrot vdb 8
 
-echo "== Attaching DVD ISO for Task 13/17 repo work (alpha + charlie + echo) =="
-for vm in rhel10-alpha rhel10-charlie; do
-  sudo virsh attach-disk "${vm}" \
-    /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso \
-    sda --type cdrom --mode readonly --config
+echo "== Attaching DVD ISO to every exam VM (local repo source for all nodes) =="
+# sda is the golden image's built-in CD-ROM drive, so insert media rather than attach a new disk
+for vm in rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta rhel10-echo rhel10-foxtrot; do
+  sudo virsh change-media "${vm}" sda \
+    /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
 done
-sudo virsh change-media rhel10-echo sda \
-  /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
 
 echo "== Seeding Exam 1/2 pre-conditions (offline, no boot needed) =="
 sudo virt-customize -d rhel10-bravo   --root-password "password:$(openssl rand -base64 24)"

@@ -5,8 +5,7 @@ created: 2026-09-09
 covers: [EX200 objectives untested by Practice Exams 1 and 2]
 note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading Checklist during a timed run.
 ---
-
-# 🧪 RHCSA Practice Exam #3 — RHEL 10 (EX200) — Gap-Fill Edition
+# 🧪 RHCSA Practice Exam 3 — RHEL 10 (EX200) — Gap-Fill Edition
 
 > **Format:** Performance-based | **Time budget:** 4 hours, or two sittings | **Pass Score:** 25 / 35
 >
@@ -29,17 +28,17 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 
 ### Required Virtual Machines
 
-| VM                | vCPU | RAM  | Primary Disk       | Extra Disks                        |
-| ----------------- | ---- | ---- | ------------------ | ---------------------------------- |
-| `rhel10-echo`     | 2    | 2 GB | 20 GB `/dev/vda`   | 8 GB `/dev/vdb`, 6 GB `/dev/vdc`   |
-| `rhel10-foxtrot`  | 2    | 2 GB | 20 GB `/dev/vda`   | 8 GB `/dev/vdb`                    |
+| VM                 | vCPU | RAM  | Primary Disk       | Extra Disks                          |
+| ------------------ | ---- | ---- | ------------------ | ------------------------------------ |
+| `rhel10-echo`    | 2    | 2 GB | 20 GB `/dev/vda` | 8 GB `/dev/vdb`, 6 GB `/dev/vdc` |
+| `rhel10-foxtrot` | 2    | 2 GB | 20 GB `/dev/vda` | 8 GB `/dev/vdb`                    |
 
 ### Network — third isolated subnet
 
-| Host    | Hostname            | IPv4               | IPv6             | Gateway        | DNS                      |
-| ------- | ------------------- | ------------------ | ---------------- | -------------- | ------------------------ |
-| echo    | `echo.ex200.net`    | `172.16.40.21/24`  | `fd10::21/64`    | `172.16.40.1`  | `172.16.40.1, 1.1.1.1`   |
-| foxtrot | `foxtrot.ex200.net` | `172.16.40.22/24`  | `fd10::22/64`    | `172.16.40.1`  | `172.16.40.1, 1.1.1.1`   |
+| Host    | Hostname              | IPv4                | IPv6            | Gateway         | DNS                      |
+| ------- | --------------------- | ------------------- | --------------- | --------------- | ------------------------ |
+| echo    | `echo.ex200.net`    | `172.16.40.21/24` | `fd10::21/64` | `172.16.40.1` | `172.16.40.1, 1.1.1.1` |
+| foxtrot | `foxtrot.ex200.net` | `172.16.40.22/24` | `fd10::22/64` | `172.16.40.1` | `172.16.40.1, 1.1.1.1` |
 
 ### Build (clones from `rhel10-golden` — see [README.md](README.md) Phase 0)
 
@@ -89,9 +88,11 @@ sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-echo    vdb 8
 sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-echo    vdc 6
 sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-foxtrot vdb 8
 
-# DVD ISO to echo (Task 17 repo work)
-sudo virsh change-media rhel10-echo sda \
-  /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
+# DVD ISO to BOTH VMs: the local repo source (Task 17 on echo; foxtrot needs it for nfs-utils in Task 25)
+for vm in rhel10-echo rhel10-foxtrot; do
+  sudo virsh change-media "${vm}" sda \
+    /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
+done
 ```
 
 ### 🔧 Seeding the broken conditions (do this BEFORE the exam-ready snapshot)
@@ -171,6 +172,7 @@ done
 3. All configuration must survive a reboot unless the task says otherwise.
 4. Where a task says "record the answer in `<file>`", the grader checks that file — the command alone isn't credit.
 5. Budget ~4 minutes per task. Flag anything over 8 minutes and come back.
+6. **Configure repositories first.** Nothing installs until Task 17 is done, and many earlier tasks need packages. Once foxtrot is recovered (Task 1), do Task 17 on echo before the rest, then set up the same repo on foxtrot (the DVD is attached to both as `/dev/sr0`). On the real EX200, do the repo task first too, whatever its number.
 
 ---
 
@@ -643,43 +645,43 @@ Write `/usr/local/bin/userreport.sh` that produces a report at `/var/log/userrep
 
 ## 📊 Grading Checklist
 
-| #  | Task                                              | Gap-fill | Reboot Test | Done |
-| -- | ------------------------------------------------- | :------: | :---------: | :--: |
-| 1  | Recover unbootable system (broken fstab)          |    ★    |      ✓      | [ ] |
-| 2  | One-shot boot to rescue.target via GRUB           |    ★    |      —      | [ ] |
-| 3  | Kernel args via `grubby`                          |    ★    |      ✓      | [ ] |
-| 4  | Diagnose + repair failed service                  |    ★    |      ✓      | [ ] |
-| 5  | systemd drop-in override                          |    ★    |      ✓      | [ ] |
-| 6  | I/O redirection (stdout/stderr/tee/heredoc)       |    ★    |      —      | [ ] |
-| 7  | grep + regular expressions                        |    ★    |      —      | [ ] |
-| 8  | `find` with size/time/owner/perm/-exec            |    ★    |      —      | [ ] |
-| 9  | tar + gzip + bzip2, list/extract/exclude          |    ★    |      —      | [ ] |
-| 10 | System documentation lookups                      |    ★    |      —      | [ ] |
-| 11 | Users w/ custom skel + home relocation            |          |      ✓      | [ ] |
-| 12 | sudo Defaults (timeout, logfile, secure_path)     |    ★    |      ✓      | [ ] |
-| 13 | ACL mask + default inheritance                    |    ★    |      ✓      | [ ] |
-| 14 | SELinux context: cp vs mv                         |    ★    |      ✓      | [ ] |
-| 15 | Two nmcli profiles + resolution order             |    ★    |      ✓      | [ ] |
-| 16 | Firewalld port forward + masquerade               |    ★    |      ✓      | [ ] |
-| 17 | Repo w/ GPG + dnf provides/whatprovides/search    |    ★    |      ✓      | [ ] |
-| 18 | `dnf history` undo / redo                         |    ★    |      —      | [ ] |
-| 19 | RPM query uninstalled + rpm2cpio extract          |    ★    |      —      | [ ] |
-| 20 | GPT type codes + `sfdisk` dump/backup             |    ★    |      ✓      | [ ] |
-| 21 | **Shrink** an ext4 LV                             |    ★    |      ✓      | [ ] |
-| 22 | Replace swap + remove original                    |    ★    |      ✓      | [ ] |
-| 23 | noexec proof + live remount ro/rw                 |    ★    |      ✓      | [ ] |
-| 24 | Bind mount in fstab                               |    ★    |      ✓      | [ ] |
-| 25 | NFS server + exports diagnostic                   |    ★    |      ✓      | [ ] |
-| 26 | AutoFS indirect map w/ 45s timeout                |          |      ✓      | [ ] |
-| 27 | journalctl time/field filtering + vacuum          |    ★    |      ✓      | [ ] |
-| 28 | Persistent sysctl drop-in                         |    ★    |      ✓      | [ ] |
-| 29 | at + at.allow + /etc/cron.d                       |    ★    |      ✓      | [ ] |
-| 30 | Chrony server/client + timezone                   |          |      ✓      | [ ] |
-| 31 | Script w/ strict mode + exit codes                |    ★    |      —      | [ ] |
-| 32 | Text-processing report script                     |    ★    |      —      | [ ] |
-| 33 | **Diagnose** SELinux denials unaided              |    ★    |      ✓      | [ ] |
-| 34 | Build/install local policy module                 |    ★    |      ✓      | [ ] |
-| 35 | Per-user Flatpak + remote disable/delete guard    |    ★    |      ✓      | [ ] |
+| #  | Task                                           | Gap-fill | Reboot Test | Done |
+| -- | ---------------------------------------------- | :------: | :---------: | :--: |
+| 1  | Recover unbootable system (broken fstab)       |    ★    |     ✓     | [ ] |
+| 2  | One-shot boot to rescue.target via GRUB        |    ★    |     —     | [ ] |
+| 3  | Kernel args via `grubby`                     |    ★    |     ✓     | [ ] |
+| 4  | Diagnose + repair failed service               |    ★    |     ✓     | [ ] |
+| 5  | systemd drop-in override                       |    ★    |     ✓     | [ ] |
+| 6  | I/O redirection (stdout/stderr/tee/heredoc)    |    ★    |     —     | [ ] |
+| 7  | grep + regular expressions                     |    ★    |     —     | [ ] |
+| 8  | `find` with size/time/owner/perm/-exec       |    ★    |     —     | [ ] |
+| 9  | tar + gzip + bzip2, list/extract/exclude       |    ★    |     —     | [ ] |
+| 10 | System documentation lookups                   |    ★    |     —     | [ ] |
+| 11 | Users w/ custom skel + home relocation         |          |     ✓     | [ ] |
+| 12 | sudo Defaults (timeout, logfile, secure_path)  |    ★    |     ✓     | [ ] |
+| 13 | ACL mask + default inheritance                 |    ★    |     ✓     | [ ] |
+| 14 | SELinux context: cp vs mv                      |    ★    |     ✓     | [ ] |
+| 15 | Two nmcli profiles + resolution order          |    ★    |     ✓     | [ ] |
+| 16 | Firewalld port forward + masquerade            |    ★    |     ✓     | [ ] |
+| 17 | Repo w/ GPG + dnf provides/whatprovides/search |    ★    |     ✓     | [ ] |
+| 18 | `dnf history` undo / redo                    |    ★    |     —     | [ ] |
+| 19 | RPM query uninstalled + rpm2cpio extract       |    ★    |     —     | [ ] |
+| 20 | GPT type codes + `sfdisk` dump/backup        |    ★    |     ✓     | [ ] |
+| 21 | **Shrink** an ext4 LV                    |    ★    |     ✓     | [ ] |
+| 22 | Replace swap + remove original                 |    ★    |     ✓     | [ ] |
+| 23 | noexec proof + live remount ro/rw              |    ★    |     ✓     | [ ] |
+| 24 | Bind mount in fstab                            |    ★    |     ✓     | [ ] |
+| 25 | NFS server + exports diagnostic                |    ★    |     ✓     | [ ] |
+| 26 | AutoFS indirect map w/ 45s timeout             |          |     ✓     | [ ] |
+| 27 | journalctl time/field filtering + vacuum       |    ★    |     ✓     | [ ] |
+| 28 | Persistent sysctl drop-in                      |    ★    |     ✓     | [ ] |
+| 29 | at + at.allow + /etc/cron.d                    |    ★    |     ✓     | [ ] |
+| 30 | Chrony server/client + timezone                |          |     ✓     | [ ] |
+| 31 | Script w/ strict mode + exit codes             |    ★    |     —     | [ ] |
+| 32 | Text-processing report script                  |    ★    |     —     | [ ] |
+| 33 | **Diagnose** SELinux denials unaided     |    ★    |     ✓     | [ ] |
+| 34 | Build/install local policy module              |    ★    |     ✓     | [ ] |
+| 35 | Per-user Flatpak + remote disable/delete guard |    ★    |     ✓     | [ ] |
 
 **Score: ___ / 35**  ·  **Pass: 25 / 35**  ·  ★ = objective or scenario untested by Exams 1 & 2 (**26 of 35**)
 
@@ -830,6 +832,7 @@ The unit passes `--daemon`; the script ignores unknown arguments, which is fine.
 ```bash
 sudo systemctl edit sshd.service
 ```
+
 Creates `/etc/systemd/system/sshd.service.d/override.conf`:
 
 ```ini
@@ -1030,14 +1033,30 @@ ls -Z /var/www/html/preserved.html >> /root/context_report.txt
 **T15 — Two profiles**
 
 ```bash
-nmcli con show                              # find the device name, e.g. enp1s0
-sudo nmcli con add type ethernet ifname enp1s0 con-name lab3-static \
-  ipv4.method manual ipv4.addresses 172.16.40.21/24 ipv4.gateway 172.16.40.1 \
-  ipv4.dns "172.16.40.1 1.1.1.1" \
-  ipv6.method manual ipv6.addresses fd10::21/64 \
-  connection.autoconnect yes
-sudo nmcli con add type ethernet ifname enp1s0 con-name lab3-dhcp \
-  ipv4.method auto ipv6.method auto connection.autoconnect no
+nmcli device status                         # find the device name, e.g. enp1s0
+nmcli con show                              # find the existing profile name
+
+# 1. Primary profile: rename the existing one to lab3-static, then set one property per command
+sudo nmcli con mod "<old profile>" connection.id lab3-static
+# IPv4: set the address BEFORE method=manual (manual with no address is rejected)
+sudo nmcli con mod lab3-static ipv4.addresses 172.16.40.21/24
+sudo nmcli con mod lab3-static ipv4.gateway 172.16.40.1
+sudo nmcli con mod lab3-static ipv4.dns "172.16.40.1 1.1.1.1"
+sudo nmcli con mod lab3-static ipv4.method manual
+# IPv6: same order
+sudo nmcli con mod lab3-static ipv6.addresses fd10::21/64
+sudo nmcli con mod lab3-static ipv6.method manual
+sudo nmcli con mod lab3-static connection.autoconnect yes
+sudo nmcli con up lab3-static               # changes don't apply until re-activated
+
+# 2. Second profile: this one has to be NEW, so 'add' a bare profile, then configure it
+sudo nmcli con add type ethernet ifname enp1s0 con-name lab3-dhcp
+sudo nmcli con mod lab3-dhcp ipv4.method auto
+sudo nmcli con mod lab3-dhcp ipv6.method auto
+sudo nmcli con mod lab3-dhcp connection.autoconnect no
+
+nmcli -g ipv4.method,ipv4.addresses,connection.autoconnect con show lab3-static
+nmcli -g ipv4.method,connection.autoconnect con show lab3-dhcp
 
 ip -4 addr show enp1s0
 ip -6 addr show enp1s0
@@ -1050,7 +1069,7 @@ sudo hostnamectl set-hostname echo.ex200.net
 printf '172.16.40.21 echo.ex200.net echo\n172.16.40.22 foxtrot.ex200.net foxtrot\n' \
   | sudo tee -a /etc/hosts
 
-cat > /root/resolution.txt <<'EOF'
+sudo tee /root/resolution.txt > /dev/null <<'EOF'
 /etc/nsswitch.conf controls lookup order.
 The applicable line is:  hosts: files dns myhostname
 "files" = /etc/hosts is consulted before DNS.
@@ -1059,6 +1078,26 @@ ping -c2 foxtrot
 ```
 
 Bringing one profile up on a shared interface automatically brings the other down — only one connection can be active per device.
+
+- **`nmcli con add` makes the new profile active right away.** A bare `add` defaults to `autoconnect yes` and may take over `enp1s0` before you set `autoconnect no`. If your static address disappears, run `sudo nmcli con up lab3-static`.
+- **Order matters.** `ipv4.method manual` fails with *"ipv4.addresses: this property cannot be empty"* if no address is set yet. Set the address first.
+- **Use Tab completion.** `nmcli con mod lab3-static ipv4.<Tab><Tab>` lists every property. `man nmcli-examples` has ready-made static-IP examples.
+
+> **Other ways to do this on RHEL 10.** All of these persist, because they all write NetworkManager keyfiles:
+>
+> | Tool | How | Exam notes |
+> |---|---|---|
+> | **`nmtui`** | A text menu: *Edit a connection* → fill in the fields → *Activate a connection*. It can also add a second profile and set the hostname. | **Often the fastest and least typo-prone choice under time pressure.** Changing the "Profile name" field renames the profile. Reactivate it afterwards to apply the changes. |
+> | **`nmcli con edit lab3-static`** | An interactive shell: `set ipv4.addresses 172.16.40.21/24`, `set ipv4.method manual`, `print`, `save`, `quit`. | Tab completion works, and `describe <property>` gives help on it. |
+> | **`nmcli con add ...` with all properties** | Creates and configures a profile in one long command. | Same result, but long lines invite typos. |
+> | **Edit the keyfile directly** | Edit `/etc/NetworkManager/system-connections/<name>.nmconnection`, then run `nmcli con reload` and `nmcli con up <name>`. | No syntax checking. The file must be mode `600`, owned by root, or NetworkManager ignores it. |
+> | **Cockpit / GNOME Settings** | The web console (`https://host:9090`, needs `cockpit.socket`) or the GUI Network panel. | Usually not worth the setup time on the exam. |
+>
+> **Gone or not persistent in RHEL 10:** `ifcfg-*` files and `ifup`/`ifdown` (`network-scripts`) have been removed. `ip addr add` and `ip route add` are lost at reboot. NetworkManager overwrites hand edits to `/etc/resolv.conf`.
+>
+> **Hostname:** `hostnamectl set-hostname` (or `nmcli general hostname`, or `nmtui`).
+>
+> **After using any of these, verify** with `nmcli -g ipv4.addresses,ipv4.method con show lab3-static` and `ip -br addr`.
 
 **T16 — Port forwarding**
 
@@ -1116,6 +1155,25 @@ dnf search "network manager"     > /root/q4.txt
 ```
 
 `nofail` is what keeps a missing disc from dropping the machine to emergency mode — exactly the Task 1 failure mode. `dnf provides` searches repo metadata (works for uninstalled packages); `rpm -qf` only answers for files already on disk.
+
+**Foxtrot needs the repo too.** The task only names echo, but foxtrot has no other package source and Task 25 needs `nfs-utils`. The DVD is attached to foxtrot as `/dev/sr0`. On foxtrot:
+
+```bash
+sudo mkdir -p /mnt/dvd
+echo '/dev/sr0  /mnt/dvd  iso9660  ro,nofail  0 0' | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload
+sudo mount /mnt/dvd
+sudo rpm --import /mnt/dvd/RPM-GPG-KEY-redhat-release
+```
+
+Then, from echo:
+
+```bash
+scp /etc/yum.repos.d/lab3.repo foxtrot:/tmp/
+ssh -t foxtrot 'sudo mv /tmp/lab3.repo /etc/yum.repos.d/ && sudo restorecon -v /etc/yum.repos.d/lab3.repo && dnf repolist'
+```
+
+`mv` keeps the `/tmp` SELinux label, hence the `restorecon` (see Task 14). Or just recreate the file on foxtrot with the same heredoc.
 
 **T18 — History rollback**
 
@@ -1302,7 +1360,7 @@ Filesystem type is `none` and the option is `bind`. `mount --bind /srv/appdata /
 **T25 — NFS server with a diagnostic**
 
 ```bash
-sudo dnf install -y nfs-utils
+sudo dnf install -y nfs-utils        # needs foxtrot's repo (T17 foxtrot note)
 sudo mkdir -p /export/team
 sudo chown nobody:nobody /export/team
 sudo chmod 2775 /export/team
@@ -1621,29 +1679,29 @@ flatpak --system list --app > /root/fp_system.txt         # no Thunderbird
 
 ## 📚 What This Exam Adds Over Exams 1 & 2
 
-| Area | Exams 1 & 2 | Exam 3 |
-| ---- | ----------- | ------ |
-| Boot recovery | Reset a forgotten password | **Repair an unbootable system** with the password also unknown |
-| Boot targets | `set-default` | **One-shot GRUB target** + `grubby` for kernel args |
-| Services | Start/enable working units | **Diagnose a failing unit**; **drop-in overrides** |
-| Essential tools | One task each: links/find/tar.bz2 (Ex1), grep/redirection/tar.xz (Ex2) | **Full section: redirection, grep/regex, find, tar/bzip2, man/info** |
-| sudo | Aliases, NOPASSWD | **`Defaults`**: timestamps, logfile, secure_path |
-| ACLs | Set entries | **Mask semantics** + effective permissions |
-| SELinux contexts | Set and restore | **`cp` vs `mv`** inheritance, `--preserve=context` |
-| SELinux fixes | Told what to fix | **Diagnose unaided**; `audit2why`, `sealert`, custom module |
-| Networking | One profile | **Two profiles**, switching, `nsswitch` order |
-| Firewall | Services, ports, zones | **Port forwarding + masquerade** |
-| Packages | Install/remove/verify | **`dnf history` undo/redo**, `rpm2cpio`, `-qlp`, `--scripts` |
-| Partitioning | `fdisk` interactive, `parted -s` | **Type codes** (`t`/`L`), **`sfdisk -d`** dump + restorable backup |
-| LVM | Extend | **Shrink ext4** (and why XFS can't) |
-| Swap | Add partition / file | **Replace and remove** cleanly |
-| Mounts | fstab by UUID/LABEL | **Live remount ro/rw**, `noexec` proof, **bind mounts** |
-| NFS | Configure | **Diagnose a malformed export** |
-| Logging | Persistent journal | **Time/field filtering**, vacuum, size caps |
-| Kernel tunables | Via tuned | **`/etc/sysctl.d/` drop-ins** |
-| Scheduling | at, cron, timers | **`at.allow`**, `at -c`, **`/etc/cron.d` user field** |
-| Scripting | if/case/for/while | **strict mode + meaningful exit codes**, text processing |
-| Flatpak | System-wide install from DVD (Ex1) / Flathub (Ex2) | **Per-user** install, **disable vs delete** remote, delete guard |
+| Area             | Exams 1 & 2                                                            | Exam 3                                                                               |
+| ---------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| Boot recovery    | Reset a forgotten password                                             | **Repair an unbootable system** with the password also unknown                 |
+| Boot targets     | `set-default`                                                        | **One-shot GRUB target** + `grubby` for kernel args                          |
+| Services         | Start/enable working units                                             | **Diagnose a failing unit**; **drop-in overrides**                       |
+| Essential tools  | One task each: links/find/tar.bz2 (Ex1), grep/redirection/tar.xz (Ex2) | **Full section: redirection, grep/regex, find, tar/bzip2, man/info**           |
+| sudo             | Aliases, NOPASSWD                                                      | **`Defaults`**: timestamps, logfile, secure_path                             |
+| ACLs             | Set entries                                                            | **Mask semantics** + effective permissions                                     |
+| SELinux contexts | Set and restore                                                        | **`cp` vs `mv`** inheritance, `--preserve=context`                       |
+| SELinux fixes    | Told what to fix                                                       | **Diagnose unaided**; `audit2why`, `sealert`, custom module                |
+| Networking       | One profile                                                            | **Two profiles**, switching, `nsswitch` order                                |
+| Firewall         | Services, ports, zones                                                 | **Port forwarding + masquerade**                                               |
+| Packages         | Install/remove/verify                                                  | **`dnf history` undo/redo**, `rpm2cpio`, `-qlp`, `--scripts`           |
+| Partitioning     | `fdisk` interactive, `parted -s`                                   | **Type codes** (`t`/`L`), **`sfdisk -d`** dump + restorable backup |
+| LVM              | Extend                                                                 | **Shrink ext4** (and why XFS can't)                                            |
+| Swap             | Add partition / file                                                   | **Replace and remove** cleanly                                                 |
+| Mounts           | fstab by UUID/LABEL                                                    | **Live remount ro/rw**, `noexec` proof, **bind mounts**                |
+| NFS              | Configure                                                              | **Diagnose a malformed export**                                                |
+| Logging          | Persistent journal                                                     | **Time/field filtering**, vacuum, size caps                                    |
+| Kernel tunables  | Via tuned                                                              | **`/etc/sysctl.d/` drop-ins**                                                |
+| Scheduling       | at, cron, timers                                                       | **`at.allow`**, `at -c`, **`/etc/cron.d` user field**              |
+| Scripting        | if/case/for/while                                                      | **strict mode + meaningful exit codes**, text processing                       |
+| Flatpak          | System-wide install from DVD (Ex1) / Flathub (Ex2)                     | **Per-user** install, **disable vs delete** remote, delete guard         |
 
 ---
 
@@ -1651,13 +1709,13 @@ flatpak --system list --app > /root/fp_system.txt         # no Thunderbird
 
 The delayed exam date turns the biggest weakness in this practice set — that Exams 1 and 2 were worked *with their answers visible* — into something you now have time to fix. Use it:
 
-| Week | Dates | Focus |
-| ---- | ----- | ----- |
-| 1 | Sep 9–15 | Build `echo`/`foxtrot`. Run **Exam 3 cold and timed**. Expect a low score — that is the diagnostic, not a failure |
-| 2 | Sep 16–22 | Re-run **Exams 1 and 2 cold**, with the inline solutions covered or scrolled past. This is the recall-vs-recognition fix |
-| 3 | Sep 23–29 | Re-run **Exam 3**; drill only what failed twice across all three |
-| 4 | Sep 30 – Oct 6 | All three back-to-back over a weekend. Target **30/35 each**. Book the real exam once you hit it |
-| 5 | Oct 7–14 | Light review only. Weak-area drills, no new material. Take EX200 |
+| Week | Dates           | Focus                                                                                                                          |
+| ---- | --------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| 1    | Sep 9–15       | Build `echo`/`foxtrot`. Run **Exam 3 cold and timed**. Expect a low score — that is the diagnostic, not a failure   |
+| 2    | Sep 16–22      | Re-run **Exams 1 and 2 cold**, with the inline solutions covered or scrolled past. This is the recall-vs-recognition fix |
+| 3    | Sep 23–29      | Re-run **Exam 3**; drill only what failed twice across all three                                                         |
+| 4    | Sep 30 – Oct 6 | All three back-to-back over a weekend. Target **30/35 each**. Book the real exam once you hit it                         |
+| 5    | Oct 7–14       | Light review only. Weak-area drills, no new material. Take EX200                                                               |
 
 **If a week gets eaten** (travel, work, family), collapse to this priority order:
 
@@ -1668,4 +1726,4 @@ The delayed exam date turns the biggest weakness in this practice set — that E
 
 ---
 
-*Practice exam #3 created 2026-09-09. Companion to [RHCSA Practice Exam 1 - RHEL 10](RHCSA%20Practice%20Exam%201%20-%20RHEL%2010.md) and [RHCSA Practice Exam 2 - RHEL 10](RHCSA%20Practice%20Exam%202%20-%20RHEL%2010.md). Lab build instructions extend [README.md](README.md) Phase 0.*
+*Practice exam #3 created 2026-09-09. Companion to [RHCSA Practice Exam 1 - RHEL 10](<RHCSA%20Practice%20Exam%201%20-%20RHEL%2010.md>) and [RHCSA Practice Exam 2 - RHEL 10](<RHCSA%20Practice%20Exam%202%20-%20RHEL%2010.md>). Lab build instructions extend [README.md](README.md) Phase 0.*

@@ -19,18 +19,18 @@ note: Golden image build lives here; RHCA lab guide references it downstream.
 
 ## 📊 Exam-at-a-Glance
 
-| Attribute         | Exam 1                                                     | Exam 2                                         | Exam 3                                                                                                |
-| ----------------- | ---------------------------------------------------------- | ---------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
-| VMs               | `rhel10-alpha`, `rhel10-bravo`                         | `rhel10-charlie`, `rhel10-delta`           | `rhel10-echo`, `rhel10-foxtrot`                                                                   |
-| Subnet            | `192.168.100.0/24`                                       | `10.20.30.0/24`                              | `172.16.40.0/24`                                                                                    |
-| Node IPs          | alpha`.10`, bravo `.20`                                | charlie`.11`, delta `.12`                  | echo`.21`, foxtrot `.22` (also has IPv6 `fd10::/64`)                                            |
-| Break-in target   | bravo (init=/bin/bash method)                              | charlie (init=/bin/bash method)                | foxtrot (broken fstab + scrambled root, Task 1)                                                       |
-| Special boot      | none                                                       | delta boots to`rescue.target`                | none — but echo has a pre-broken`labdata.service` (Task 4) and seeded SELinux violations (Task 33) |
-| Extra disks       | alpha +10G; bravo +10G, +5G                                | charlie +8G, +6G, +4G; delta +8G               | echo +8G, +6G; foxtrot +8G                                                                            |
-| Local repo source | DVD ISO attached to`alpha` and `bravo` as `/dev/sr0` | DVD ISO attached to`charlie` as `/dev/sr0` | DVD ISO attached to`echo` as `/dev/sr0`                                                           |
-| Tasks             | 35                                                         | 35                                             | 35 (gap-fill: covers objectives Exams 1–2 didn't touch)                                              |
-| Time limit        | 2.5 hrs                                                    | 2.5 hrs                                        | **4 hrs** (or two sittings)                                                                     |
-| Pass mark         | 25 / 35                                                    | 25 / 35                                        | 25 / 35                                                                                               |
+| Attribute         | Exam 1                                                     | Exam 2                                                        | Exam 3                                                                                                |
+| ----------------- | ---------------------------------------------------------- | ------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| VMs               | `rhel10-alpha`, `rhel10-bravo`                         | `rhel10-charlie`, `rhel10-delta`                          | `rhel10-echo`, `rhel10-foxtrot`                                                                   |
+| Subnet            | `192.168.100.0/24`                                       | `10.20.30.0/24`                                             | `172.16.40.0/24`                                                                                    |
+| Node IPs          | alpha`.10`, bravo `.20`                                | charlie`.11`, delta `.12`                                 | echo`.21`, foxtrot `.22` (also has IPv6 `fd10::/64`)                                            |
+| Break-in target   | bravo (init=/bin/bash method)                              | charlie (init=/bin/bash method)                               | foxtrot (broken fstab + scrambled root, Task 1)                                                       |
+| Special boot      | none                                                       | delta boots to`rescue.target`                               | none — but echo has a pre-broken`labdata.service` (Task 4) and seeded SELinux violations (Task 33) |
+| Extra disks       | alpha +10G; bravo +10G, +5G                                | charlie +8G, +6G, +4G; delta +8G                              | echo +8G, +6G; foxtrot +8G                                                                            |
+| Local repo source | DVD ISO attached to`alpha` and `bravo` as `/dev/sr0` | DVD ISO attached to `charlie` and `delta` as `/dev/sr0` | DVD ISO attached to `echo` and `foxtrot` as `/dev/sr0`                                          |
+| Tasks             | 35                                                         | 35                                                            | 35 (gap-fill: covers objectives Exams 1–2 didn't touch)                                              |
+| Time limit        | 2.5 hrs                                                    | 2.5 hrs                                                       | **4 hrs** (or two sittings)                                                                     |
+| Pass mark         | 25 / 35                                                    | 25 / 35                                                       | 25 / 35                                                                                               |
 
 ---
 
@@ -624,18 +624,18 @@ echo "delta default target set to rescue.target (Task 2 changes it to graphical)
 
 > `rescue.target` prompts for the root password. Keep delta's root password at the known golden value so you can enter the rescue shell — only charlie's password is scrambled.
 
-### 4.6b — Attach the DVD ISO to charlie (Task 13 repo source)
+### 4.6b — Attach the DVD ISO to charlie and delta (local repo source)
 
 > **Note:** the sda disk is created by deffault as the VMs CD-ROM drive and cannot be removed.  Modify it to insert the .iso as source repo.  If VM is off, remove the `--live` parameter.
 
 ```bash
-sudo virsh change-media rhel10-charlie \
-  sda /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso \
-  --insert --config --live
-sudo virsh domblklist rhel10-charlie
+for vm in rhel10-charlie rhel10-delta; do
+  sudo virsh change-media "$vm" sda /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config --live
+  sudo virsh domblklist "$vm"   # confirm the cdrom shows up
+done
 ```
 
-> Appears as `/dev/sr0` inside charlie. Attach **before** the 4.7 snapshot so `exam2-ready` keeps the media.
+> Appears as `/dev/sr0` inside each VM. Task 13 builds the repo on charlie. Delta has no internet either, and it needs packages for Task 2 (the "Server with GUI" group) and Task 21 (`nfs-utils`), so it gets the same media and the same repo files. Attach **before** the 4.7 snapshot so `exam2-ready` keeps the media.
 
 ### 4.7 — Start and snapshot
 
@@ -768,15 +768,16 @@ sudo firewall-cmd --permanent --add-port=8404/tcp && sudo firewall-cmd --reload
 sudo shutdown -h now
 ```
 
-### 5.5b — Attach the DVD ISO to echo (Task 17 repo source)
+### 5.5b — Attach the DVD ISO to echo and foxtrot (local repo source)
 
 ```bash
-sudo virsh change-media rhel10-echo sda \
-  /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
-sudo virsh domblklist rhel10-echo
+for vm in rhel10-echo rhel10-foxtrot; do
+  sudo virsh change-media "$vm" sda /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
+  sudo virsh domblklist "$vm"   # confirm the cdrom shows up
+done
 ```
 
-> Appears as `/dev/sr0` inside echo. Attach **before** the 5.6 snapshot so `exam3-ready` retains the media across reverts.
+> Appears as `/dev/sr0` inside each VM. Task 17 builds the repo on echo. Foxtrot needs the same repo for Task 25 (`nfs-utils`). Attach **before** the 5.6 snapshot so `exam3-ready` retains the media across reverts.
 
 ### 5.6 — Start and snapshot
 
@@ -1042,7 +1043,7 @@ sudo virt-clone --original rhel10-golden --name rhel10-delta \
   --file /home/libvirt/images/rhel10-delta.qcow2
 
 # Then repeat Phase 4.2 – 4.7: network, hostname/mem/vcpus, extra disks,
-# charlie's scrambled root password, delta's rescue.target, charlie's DVD ISO,
+# charlie's scrambled root password, delta's rescue.target, DVD ISO on charlie + delta,
 # start + exam2-ready snapshot.
 ```
 
@@ -1063,7 +1064,7 @@ sudo virt-clone --original rhel10-golden --name rhel10-foxtrot \
 
 # Then repeat Phase 5.2 – 5.6: network, hostname/mem/vcpus, extra disks,
 # foxtrot's broken fstab + scrambled root, echo's labdata.service + SELinux
-# seeding, echo's DVD ISO, start + exam3-ready snapshot.
+# seeding, DVD ISO on echo + foxtrot, start + exam3-ready snapshot.
 ```
 
 > **Verify no orphans were left behind:** `sudo virsh vol-list homepool` should show only `rhel10-{host}.qcow2` names. Anything else (e.g. a stray `rhhost-*.qcow2`) is leftover from outside this naming convention — confirm no domain still references it (`sudo virsh dumpxml <domain> | grep qcow2`) before reclaiming the space with `sudo virsh vol-delete --pool homepool <file>`.
@@ -1136,13 +1137,9 @@ sudo "${ADDDISK}" rhel10-echo    vdb 8
 sudo "${ADDDISK}" rhel10-echo    vdc 6
 sudo "${ADDDISK}" rhel10-foxtrot vdb 8
 
-echo "== Attaching DVD ISO for Task 13/17 repo work (alpha + bravo + charlie + echo) =="
-for vm in rhel10-alpha rhel10-charlie; do
-  sudo virsh attach-disk "${vm}" \
-    /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso \
-    sda --type cdrom --mode readonly --config
-done
-for vm in rhel10-bravo rhel10-echo; do
+echo "== Attaching DVD ISO to every exam VM (local repo source for all nodes) =="
+# sda is the golden image's built-in CD-ROM drive, so insert media rather than attach a new disk
+for vm in rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta rhel10-echo rhel10-foxtrot; do
   sudo virsh change-media "${vm}" sda \
     /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
 done

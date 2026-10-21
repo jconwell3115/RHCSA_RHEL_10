@@ -5,7 +5,7 @@ created: 2026-07-08
 restructured: 2026-09-09 - answer key moved to bottom for cold re-runs
 note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading Checklist during a timed run.
 ---
-# 🧪 RHCSA Practice Exam #2 — RHEL 10 (EX200)
+# 🧪 RHCSA Practice Exam 2 — RHEL 10 (EX200)
 
 > **Format:** Performance-based | **Time budget:** 3 hours | **Pass Score:** ~70% (25 / 35)
 > All configurations **must persist after reboot** without intervention.
@@ -40,9 +40,10 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 
 ### Repo Setup (Pre-Task — Simulates Exam Environment)
 
-- Register with `subscription-manager` **or** mount the RHEL 10 ISO
-- Do not create the repo files yet — that's Task 13
-- If offline, keep the ISO attached at `/dev/sr0`
+- Attach the RHEL 10 DVD ISO to **both** VMs. It appears as `/dev/sr0` in each (see README Phase 4.6b)
+- Don't register with `subscription-manager`. The real exam is offline, so the DVD is the only package source
+- Don't create the repo files yet. That's Task 13
+- Delta needs packages too (Task 2 GUI group, Task 21 `nfs-utils`), so it gets the same media
 
 ---
 
@@ -54,6 +55,7 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 4. Do NOT delete pre-existing users, groups, files, or services unless explicitly told to
 5. If a task depends on a previous one and you cannot complete the previous, **still attempt the current one** on a plausible substitute
 6. **Do not scroll to the answer key.** If you're stuck, use `man` — that's the skill being tested
+7. **Configure repositories first.** Nothing installs until Task 13 is done, and Tasks 2, 6, 14, 15, 17, 21 and later all need packages. Do Task 13 on charlie before anything else, then set up the same repos on delta. On the real EX200, do the repo task first too, whatever its number
 
 ---
 
@@ -151,7 +153,7 @@ On `charlie`:
     Groups:
       ops        GID: 6000
       qateam     GID: 6001
-      auditors   GID: 6002  (system group)
+      auditors   GID: 6002  /etc/
 
     Users:
       emma    UID: 2100  primary: ops       supplementary: qateam        home: /srv/users/emma
@@ -176,7 +178,7 @@ Verify home directories exist, permissions are `700`, and use `getent` to confir
   - `dcredit = -1` (at least 1 digit)
   - `ucredit = -1` (at least 1 uppercase)
   - `ocredit = -1` (at least 1 special char)
-- Test the policy by trying to set a bad password for `gina`
+- Test the policy by trying to set a bad password f:or `gina`
 
 ---
 
@@ -492,7 +494,7 @@ The application at `/opt/finance/` has been broken by a bad `chmod`. Fix these i
 4. Change one process's nice value from its default to `19`
 5. Launch a process bounded to 20% of a CPU using a transient systemd scope
 6. Kill all `stress-ng` and `openssl` processes by matching the full command line
-7. Send `SIGHUP` to `chronyd` and confirm via journal that it re-read its config
+7. Send `SIGHUP` to `sshd` and confirm via the journal that it re-read its config
 
 ---
 
@@ -758,8 +760,8 @@ case "$(hostname -s)" in
     chk "T4  IPv4 10.20.30.12"          "ip -4 addr show | grep -q '10.20.30.12'"
     chk "T4  IPv6 fd42::12"             "ip -6 addr show | grep -q 'fd42::12'"
     chk "T10 hard link demo"            "test -f /root/link_notes.txt"
-    chk "T11 PermitRootLogin prohibit"  "sshd -T 2>/dev/null | grep -qi 'permitrootlogin prohibit-password'"
-    chk "T11 AllowUsers set"            "grep -qE '^AllowUsers' /etc/ssh/sshd_config"
+    chk "T11 PermitRootLogin prohibit"  "sshd -T 2>/dev/null | grep -qiE 'permitrootlogin (prohibit|without)-password'"
+    chk "T11 AllowUsers set"            "sshd -T 2>/dev/null | grep -qi '^allowusers'"
     chk "T11 sshd config valid"         "sshd -t"
     chk "T18 swap file active"          "swapon --show | grep -q /swap/extraswap.img"
     chk "T18 swap priority 20"          "swapon --show=PRIO --noheadings | grep -q 20"
@@ -783,117 +785,919 @@ echo "== $pass passed, $fail failed =="
 
 > **Stop.** Do not read this during a timed run. Score yourself from the checklist first, then come back here for the tasks you missed.
 
+> **Conventions:**
+>
+> - **Commands assume you're a regular admin user** (e.g. `student`) with sudo rights. Commands that need root are prefixed with `sudo`. Checks that any user can run (`ls`, `id`, `getent`, `findmnt`, `ip`, ...) have no prefix.
+> - **Redirecting into root-owned files:** `sudo cmd > /root/file` fails, because the shell does the `>` as **you** before sudo runs. Use `cmd | sudo tee /root/file > /dev/null` instead, with `tee -a` in place of `>>`. Heredocs into protected files use `sudo tee FILE > /dev/null <<'EOF'`.
+> - **Working in a root shell** (`sudo -i`, or how the real EX200 usually starts you)? Drop every `sudo` and use plain `>` / `>>`.
+> - **File-content blocks** (`.repo`, unit files, scripts, config snippets) show what goes **in** the file. Create them with `sudo vim FILE`. Scripts run as root, so they have no `sudo` inside.
+> - **`su - emma`** asks for emma's password (`Init!Pass2026` from T7). `sudo su - emma` skips the prompt.
+> - Each task ends with a **Verify** block. Run it, because "I typed the command" doesn't count as done.
+
 ---
 
-### Section 1 — Boot & Recovery
+### Section 1 — System Recovery & Boot Management
 
-**T1 — Break-in via init=/bin/bash**
-
-```bash
-# At GRUB: 'e', on the linux line change ro -> rw, append init=/bin/bash, Ctrl-X
-mount -o remount,rw /       # if needed
-passwd root                 # Ex200Pass!
-touch /.autorelabel
-exec /sbin/init             # or: sync; reboot -f
-```
-
-Different from `rd.break` — you skip systemd entirely, so the root filesystem is already mounted by the kernel.
-
-**T2 — Rescue → graphical**
+**T1 — Break-in via `init=/bin/bash`** *(charlie)*
 
 ```bash
-systemctl set-default graphical.target
-dnf group install "Server with GUI"
-systemctl get-default
-runlevel        # shows 5
+# 1. Reboot; at the GRUB menu press any arrow key to stop the countdown
+# 2. Highlight the default entry, press 'e'
+# 3. On the line starting with 'linux':  change ' ro ' -> ' rw '  and append:  init=/bin/bash
+# 4. Ctrl-X to boot. You land in a root bash shell with no systemd running (PID 1 = bash)
+
+mount | grep ' / '          # confirm (rw,...); if it shows ro:
+mount -o remount,rw /
+passwd root                 # Ex200Pass!   (or: echo 'Ex200Pass!' | passwd --stdin root)
+touch /.autorelabel         # SELinux policy wasn't loaded, so /etc/shadow got the wrong label
+sync
+exec /sbin/init             # hand PID 1 to systemd. Alternative: /sbin/reboot -f
 ```
 
-**T3 — Bootloader**
+- **No `sudo` in this task.** The recovery shell is already root, and nothing else (systemd, PAM, logins) is running yet.
+- **Why `rw` + `init=/bin/bash` differs from `rd.break`:** the kernel mounts the real root itself and runs bash as PID 1. There's no initramfs switch-root and no `chroot /sysroot`.
+- **Plain `reboot` does not work.** It talks to systemd, which isn't running. Use `exec /sbin/init` or `reboot -f`.
+- **No `/.autorelabel` means a locked-out root.** `/etc/shadow` gets mislabeled, PAM can't read it under enforcing mode, and root login fails even with the right password.
+- The relabel reboot takes a minute or two and then reboots again. That's expected.
+- *Faster alternative to a full relabel:* `/usr/sbin/load_policy -i` before `passwd`, then `restorecon -v /etc/shadow`. `touch /.autorelabel` is the safe answer on the exam.
+
+**Verify:** log in on the console as `root` / `Ex200Pass!`, then `getenforce` → `Enforcing`.
+
+---
+
+**T2 — Rescue → graphical** *(delta)*
 
 ```bash
-vim /etc/default/grub    # remove rhgb quiet; add audit=1 net.ifnames=0; GRUB_TIMEOUT=5
-grub2-mkconfig -o /boot/grub2/grub.cfg
-dracut -f
-reboot
-cat /proc/cmdline
+# delta boots into rescue.target, so you get a root password prompt on the console
+systemctl get-default                   # rescue.target
+sudo systemctl set-default graphical.target  # just repoints the /etc/systemd/system/default.target symlink
+
+# Graphical target needs a GUI installed. Without one it falls back to a text login.
+# delta needs a repo first: mount the DVD and create the repo files as in Task 13 (see the T13 delta note)
+dnf group list --hidden | grep -i gui
+sudo dnf group install -y "Server with GUI"
+
+sudo systemctl reboot
 ```
 
-> `net.ifnames=0` reverts to legacy `ethX` naming — do this **before** Task 4/5, since the interface name changes.
+**Verify (after reboot):**
+
+```bash
+systemctl get-default       # graphical.target
+runlevel                    # N 5
+systemctl is-active gdm     # active (if the GUI group installed)
+ls -l /etc/systemd/system/default.target
+```
+
+- `sudo systemctl isolate graphical.target` switches **now** without a reboot. It does **not** change the default. `set-default` changes the default but does **not** switch now. The task needs `set-default`.
+- **No repo on delta yet?** Do the `set-default` part now and install the group once delta has its repos (T13 delta note). The target change is what gets graded.
+
+---
+
+**T3 — Bootloader: remove quiet, add kernel args** *(charlie)*
+
+```bash
+sudo vim /etc/default/grub
+#   GRUB_TIMEOUT=5
+#   GRUB_CMDLINE_LINUX="... crashkernel=... resume=... rd.lvm.lv=... audit=1 net.ifnames=0"
+#   (delete 'rhgb' and 'quiet'; leave everything else on the line alone)
+
+# RHEL 10 uses BLS entries (/boot/loader/entries/*.conf). Plain grub2-mkconfig does NOT
+# rewrite the options inside existing BLS entries. Use --update-bls-cmdline:
+sudo grub2-mkconfig -o /boot/grub2/grub.cfg --update-bls-cmdline
+sudo dracut -f              # task asks for it; rebuilds initramfs for the running kernel
+sudo reboot
+```
+
+**Equivalent `grubby` method.** This works on any RHEL 8+ system and is often what graders expect:
+
+```bash
+sudo grubby --update-kernel=ALL --remove-args="rhgb quiet" --args="audit=1 net.ifnames=0"
+sudo grubby --info=DEFAULT | grep args
+```
+
+Do both: edit `/etc/default/grub` so **future** kernels inherit the args, and use `--update-bls-cmdline` or `grubby` so **installed** kernels get them now.
+
+**Verify:**
+
+```bash
+cat /proc/cmdline                       # audit=1 net.ifnames=0 present; no rhgb, no quiet
+grep TIMEOUT /etc/default/grub
+sudo grubby --info=ALL | grep ^args
+```
+
+- **On UEFI, still write to `/boot/grub2/grub.cfg`.** Since RHEL 9 the file at `/boot/efi/EFI/redhat/grub.cfg` is a small stub that points at the BIOS-path file. Overwriting the stub breaks boot.
+- **`net.ifnames=0` renames the NIC to `eth0`.** Do this task **before** Tasks 4/5. If you do it after, the `lab-static` profile is still bound to the old interface name (`enp1s0` etc.) and won't come up. Fix it with `sudo nmcli con mod lab-static connection.interface-name eth0`.
+
+---
+
+### Section 2 — Networking & Hostname
+
+**T4 — `nmcli` static IPv4/IPv6 + DNS** *(both nodes; charlie values shown)*
+
+```bash
+sudo hostnamectl set-hostname charlie.ex200.lab
+
+nmcli device status                     # find the interface name (eth0 after Task 3)
+nmcli con show                          # find the existing profile name
+
+# Rename the existing profile (e.g. "eth0" or "Wired connection 1") to lab-static
+sudo nmcli con mod "<old profile>" connection.id lab-static
+
+# IPv4: set the address BEFORE method=manual (manual with no address is rejected)
+sudo nmcli con mod lab-static ipv4.addresses 10.20.30.11/24
+sudo nmcli con mod lab-static ipv4.gateway 10.20.30.1
+sudo nmcli con mod lab-static ipv4.dns "10.20.30.1 1.1.1.1"
+sudo nmcli con mod lab-static ipv4.method manual
+
+# IPv6: same order
+sudo nmcli con mod lab-static ipv6.addresses fd42::11/64
+sudo nmcli con mod lab-static ipv6.method manual
+
+sudo nmcli con mod lab-static connection.autoconnect yes
+
+sudo nmcli con up lab-static            # changes don't apply until the profile is re-activated
+```
+
+Add to `/etc/hosts` on **both** nodes:
+
+```text
+10.20.30.11   charlie.ex200.lab   charlie
+10.20.30.12   delta.ex200.lab     delta
+```
+
+On delta, use the same commands with `delta.ex200.lab`, `10.20.30.12/24` and `fd42::12/64`.
+
+**Verify:**
+
+```bash
+nmcli -g ipv4.addresses,ipv4.gateway,ipv4.dns,ipv6.addresses,connection.autoconnect con show lab-static
+ip -br addr
+cat /etc/resolv.conf                    # nameserver 10.20.30.1 / 1.1.1.1 (written by NM)
+hostnamectl --static
+ping -c2 delta && ping -c2 charlie
+ping -6 -c2 fd42::12                    # from charlie
+```
+
+- **"Connection alias"** means the NetworkManager **connection name** (`connection.id`). There is no separate alias field.
+- **Don't edit `/etc/resolv.conf` by hand.** NetworkManager overwrites it. DNS goes in `ipv4.dns`.
+- On RHEL 10 the profile lives in `/etc/NetworkManager/system-connections/lab-static.nmconnection` (keyfile format). The legacy `ifcfg` files are gone.
+- `nmcli con mod` changes don't apply until `nmcli con up lab-static` (or a reboot).
+- **Use Tab completion.** `sudo nmcli con mod lab-static ipv4.<Tab><Tab>` lists every property, so you don't need to memorise the names. `man nmcli-examples` has ready-made static-IP examples.
+- **Order matters.** `ipv4.method manual` fails with *"ipv4.addresses: this property cannot be empty"* if no address is set yet. Set the address first, as above.
+- **Shorthand aliases.** `ip4`, `gw4`, `ip6` and `gw6` work in place of `ipv4.addresses`, `ipv4.gateway`, etc. Run `nmcli -g ipv4.method con show lab-static` afterwards to make sure the method really is `manual`.
+- **Renaming beats adding a second profile.** If you `nmcli con add` a new one instead, set the old profile to `connection.autoconnect no`, or both profiles compete for `eth0` at boot.
+
+---
+
+**T5 — Custom firewalld zone + rich rule** *(charlie)*
+
+```bash
+sudo firewall-cmd --permanent --new-zone=labzone
+sudo firewall-cmd --reload                             # zone must exist at runtime before NM can use it
+
+# Bind the connection to the zone through NetworkManager (persists in the profile)
+sudo nmcli con mod lab-static connection.zone labzone
+sudo nmcli con up lab-static
+
+sudo firewall-cmd --permanent --zone=labzone --add-service={ssh,https,dns}
+sudo firewall-cmd --permanent --zone=labzone --add-port=9000-9010/tcp
+sudo firewall-cmd --permanent --zone=labzone \
+  --add-rich-rule='rule family="ipv4" source address="10.20.30.100" drop'
+sudo firewall-cmd --set-default-zone=labzone           # always both runtime + permanent
+sudo firewall-cmd --reload
+
+# The "for 60s" part: timeouts work at RUNTIME only (they can't be combined with --permanent)
+sudo firewall-cmd --zone=labzone \
+  --add-rich-rule='rule family="ipv4" source address="10.20.30.100" drop' --timeout=60s
+```
+
+**Verify:**
+
+```bash
+sudo firewall-cmd --get-default-zone                   # labzone
+sudo firewall-cmd --get-active-zones                   # labzone  interfaces: eth0
+sudo firewall-cmd --list-all --zone=labzone
+sudo firewall-cmd --permanent --list-all --zone=labzone     # what survives reboot
+```
+
+- **The task's "drop for 60s" is a trick.** `--timeout` and `--permanent` are mutually exclusive, so firewalld can't store a timed rule. The persistent answer is the permanent `drop` rule. The 60-second variant is a runtime demonstration only. Know this: on the exam, a rule that disappears at reboot scores zero.
+- **Assign the zone through NetworkManager, not firewalld.** For NM-managed interfaces, `nmcli con mod ... connection.zone` is the correct persistent method. `sudo firewall-cmd --permanent --change-interface=eth0` works too, but NetworkManager can override it on reconnect.
+- `drop` silently discards packets. `reject` sends an ICMP error back.
+- **Leave `ssh` in the zone.** Removing it, or switching the default zone before adding it, locks you out of an SSH session.
+
+---
+
+### Section 3 — Users, Groups & Permissions
+
+**T6 — Users & groups** *(charlie)*
+
+```bash
+sudo groupadd -g 6000 ops
+sudo groupadd -g 6001 qateam
+sudo groupadd -r -g 6002 auditors       # -r = system group (explicit GID still wins)
+
+sudo dnf install -y zsh
+sudo mkdir -p /srv/users                # useradd -m creates the home dir, not its parent
+
+sudo useradd -u 2100 -g ops -G qateam -d /srv/users/emma -m emma
+sudo useradd -u 2101 -g qateam -G auditors -s /bin/zsh frank
+sudo useradd -u 2102 -g ops -c "Gina — DBA" gina
+sudo useradd -u 2103 -g auditors -s /sbin/nologin henry
+
+# SELinux: give /srv/users the same labels as /home (otherwise ssh keys, etc. fail later)
+sudo semanage fcontext -a -e /home /srv/users
+sudo restorecon -Rv /srv/users
+```
+
+**Verify:**
+
+```bash
+getent group ops qateam auditors
+id emma; id frank; id gina; id henry
+getent passwd emma frank gina henry     # check home, shell, comment fields
+ls -ld /srv/users/emma /home/frank /home/gina /home/henry     # drwx------
+ls -Zd /srv/users/emma                  # user_home_dir_t
+```
+
+- Home directories come out `700` because RHEL sets `HOME_MODE 0700` in `/etc/login.defs`. If one isn't `700`, run `sudo chmod 700 DIR`.
+- **`-g` vs `-G`:** `-g` sets the **primary** group. `-G` sets the **supplementary** list. To add a group later without dropping existing ones, use `sudo usermod -aG GROUP USER`. Without `-a`, it **replaces** the whole list.
+- `/bin/zsh` must exist **before** you use it with `-s`, or `useradd` warns and frank can't log in.
+- If you forget `-d` and have to move a home later: `sudo usermod -d /srv/users/emma -m emma`.
+
+---
+
+**T7 — Password aging + pwquality** *(charlie)*
+
+```bash
+# Set passwords FIRST, before tightening pwquality
+for u in emma frank gina henry; do echo 'Init!Pass2026' | sudo passwd --stdin "$u"; done
+# (portable alternative: echo 'emma:Init!Pass2026' | sudo chpasswd)
+
+sudo chage -m 3 -M 45 -W 7 -I 14 emma
+sudo chage -d 0 frank                   # last change = epoch → forced change at next login
+sudo chage -I 5 frank                   # account locks 5 days after the password expires
+sudo chage -E 2027-01-01 gina
+
+sudo vim /etc/security/pwquality.conf   # or a drop-in: /etc/security/pwquality.conf.d/lab.conf
+#   minlen = 12
+#   dcredit = -1
+#   ucredit = -1
+#   ocredit = -1
+```
+
+**Test the policy.** As root, `passwd` only *warns* (root can override), so test as the user:
+
+```bash
+echo 'short1' | pwscore                 # quick check: prints the failure reason
+su - gina -c passwd                     # old pw Init!Pass2026, then try "password" → BAD PASSWORD
+```
+
+**Verify:**
+
+```bash
+sudo chage -l emma  # Min 3, Max 45, Warn 7, Inactive 14
+sudo chage -l frank # "Password must be changed", Inactive 5
+sudo chage -l gina  # Account expires: Jan 01, 2027
+grep -Ev '^\s*(#|$)' /etc/security/pwquality.conf
+```
+
+- **Negative credits mean a minimum count.** `dcredit = -1` requires at least 1 digit. A positive value instead gives *length credit* per digit, which is a different behaviour.
+- `sudo chage -d 0 frank` and `sudo passwd -e frank` do the same thing.
+- To apply the policy to root too, add `enforce_for_root` to `pwquality.conf`. The task doesn't ask for it.
+- `Init!Pass2026` is 13 characters with an uppercase letter, digits and a symbol, so it already passes the new policy.
+
+---
+
+**T8 — Sudo aliases** *(charlie)*
+
+```bash
+sudo visudo -f /etc/sudoers.d/lab_sudo
+```
+
+```text
+User_Alias  OPSTEAM  = emma, gina
+User_Alias  QAUSERS  = frank
+Cmnd_Alias  NETADMIN = /usr/bin/nmcli, /usr/sbin/ip, /usr/sbin/ss
+Cmnd_Alias  SVCMGMT  = /usr/bin/systemctl status *, /usr/bin/systemctl restart httpd
+
+OPSTEAM   ALL=(ALL)  NOPASSWD: NETADMIN
+QAUSERS   ALL=(ALL)  SVCMGMT
+%auditors ALL=(ALL)  /usr/bin/cat /var/log/*
+```
+
+```bash
+sudo chmod 440 /etc/sudoers.d/lab_sudo
+sudo visudo -cf /etc/sudoers.d/lab_sudo # "parsed OK"
+```
+
+**Verify:**
+
+```bash
+sudo -l -U emma     # (ALL) NOPASSWD: /usr/bin/nmcli, /usr/sbin/ip, /usr/sbin/ss
+sudo -l -U frank    # (ALL) /usr/bin/systemctl status *, ...
+sudo -l -U henry    # (ALL) /usr/bin/cat /var/log/*
+su - emma -c 'sudo ss -tln'             # no password prompt
+```
+
+- **Alias names must be UPPERCASE.** Group names take a `%` prefix. Commands need **full paths**: check them with `command -v nmcli ip ss`.
+- **Always use `visudo -f`.** It refuses to save a syntax error. A broken file in `sudoers.d` breaks `sudo` for everyone.
+- `sudoers.d` ignores files whose names contain a `.` or end in `~`, so `lab_sudo` is fine and `lab.sudo` would be silently ignored.
+- `cat /var/log/*` is not safe: `sudo cat /var/log/../../etc/shadow` matches the wildcard. Real-world fix: `sudoedit` or `less` with `NOEXEC`. Worth knowing; not graded.
+
+---
+
+**T9 — ACL project directory** *(charlie)*
+
+```bash
+sudo mkdir -p /srv/project/phoenix
+sudo chown gina:ops /srv/project/phoenix
+sudo chmod 2770 /srv/project/phoenix
+
+sudo setfacl -m u:frank:rwx,g:auditors:rx,u:henry:--- /srv/project/phoenix     # access ACL
+sudo setfacl -d -m u:frank:rwx,g:auditors:rx,u:henry:--- /srv/project/phoenix  # default ACL
+```
+
+**Verify:**
+
+```bash
+getfacl /srv/project/phoenix
+ls -ld /srv/project/phoenix             # drwxrws---+   ← the '+' means an ACL is present
+
+sudo -u gina  bash -c 'echo hello > /srv/project/phoenix/plan.txt'
+getfacl /srv/project/phoenix/plan.txt   # inherited user:frank:rwx, group:auditors:r-x, user:henry:---
+sudo -u frank bash -c 'echo edit >> /srv/project/phoenix/plan.txt' && echo "frank OK"
+sudo -u henry cat /srv/project/phoenix/plan.txt    # Permission denied
+```
+
+- **"Read-only" on a directory means `r-x`.** Without `x` the auditors can list names but can't open or `cd` into anything.
+- **henry's named entry wins over his group.** henry's primary group is `auditors`, which has `r-x`. ACL evaluation checks named-user entries **before** group entries, so `user:henry:---` blocks him.
+- **Watch the `mask`.** It caps every named entry and the group entry. A later `chmod g-w` on the directory lowers the mask and silently takes away frank's write. Re-run `sudo setfacl -m m::rwx /srv/project/phoenix` to restore it.
+- henry has a `nologin` shell, so `su - henry` fails. `sudo -u henry CMD` still works for testing.
+- Files gina creates get group `ops` from the SGID bit, and their ACL comes from the default entries.
+
+---
+
+**T10 — Per-group umask + links**
+
+charlie, `/etc/profile.d/ops-umask.sh`:
+
+```bash
+sudo tee /etc/profile.d/ops-umask.sh > /dev/null <<'EOF'
+# umask 0027 for members of ops; everyone else keeps the distro default
+if id -nG | grep -qw ops; then
+    umask 0027
+fi
+EOF
+sudo chmod 644 /etc/profile.d/ops-umask.sh
+```
+
+**Verify:**
+```bash
+su - emma -c umask       # 0027
+su - frank -c umask      # 0022 (frank isn't in ops)
+```
+
+> frank's shell is zsh, which doesn't read `/etc/profile.d/` by default. That's fine for frank, who isn't in ops anyway. Just be aware that profile.d is bash/sh-only.
+
+delta:
+
+```bash
+sudo mkdir -p /opt/data
+echo "exam data" | sudo tee /opt/data/original.txt
+sudo ln /opt/data/original.txt /opt/data/hardlink.txt     # hard link: same inode
+sudo ln -s /opt/data/original.txt /root/softlink.txt      # symlink: own inode, stores a path
+
+sudo ls -li /opt/data/ /root/softlink.txt    # same inode number on original + hardlink; link count 2
+sudo rm /opt/data/original.txt
+cat /opt/data/hardlink.txt              # exam data   ← still works
+sudo cat /root/softlink.txt             # No such file or directory  ← dangling
+sudo ls -l /root/softlink.txt           # shown in red / points to a missing target
+
+sudo tee /root/link_notes.txt > /dev/null <<'EOF'
+# Hard link = a second directory entry for the SAME inode. Data survives until the
+#   link count reaches 0, so deleting original.txt left hardlink.txt intact.
+#   Can't cross filesystems and can't link directories.
+# Soft link = its own inode that stores a PATH. When the target path is removed the
+#   symlink dangles. Can cross filesystems and can point to directories.
+EOF
+```
+
+- Use **absolute** paths for symlink targets unless you specifically want a relative link. A relative target is resolved from the **link's** directory, not from your current directory.
+
+---
+
+### Section 4 — SSH & Remote Access
+
+**T11 — SSH keys + `Match User`**
+
+charlie, as root. The task wants **root's** key, so switch to a root shell for this part:
+
+```bash
+sudo -i                                                   # root login shell; ~ is now /root
+ssh-keygen -t ecdsa -b 521 -N '' -f ~/.ssh/id_ecdsa       # nistp521 = ecdsa with 521 bits
+ssh-copy-id -i ~/.ssh/id_ecdsa.pub root@delta             # needs delta root pw login to still work
+ssh root@delta hostname                                   # no password prompt
+exit                                                      # back to your own user
+```
+
+> From now on, `sudo ssh root@delta ...`, `sudo scp`, `sudo rsync` and `sudo sftp` use root's key. ssh finds the key through root's home directory, not your `$HOME`.
+
+delta (emma with the **same UID**, and ideally the same GID so NFS ownership matches later):
+
+```bash
+sudo groupadd -g 6000 ops
+sudo useradd -u 2100 -g ops emma
+echo 'Init!Pass2026' | sudo passwd --stdin emma          # needed once so ssh-copy-id can log in
+```
+
+charlie, as emma:
+
+```bash
+su - emma
+ssh-keygen -t ed25519 -N 'Lab#2026' -f ~/.ssh/id_ed25519
+ssh-copy-id -i ~/.ssh/id_ed25519.pub emma@delta
+eval "$(ssh-agent)"; ssh-add                              # enter passphrase once
+ssh emma@delta hostname
+exit
+```
+
+delta, sshd config. Do key setup **before** turning password auth off. RHEL 10's `sshd_config` starts with `Include /etc/ssh/sshd_config.d/*.conf`, and **sshd keeps the first value it reads for each keyword**. Check for an installer-created override first:
+
+```bash
+sudo grep -r PermitRootLogin /etc/ssh/sshd_config.d/   # e.g. 01-permitrootlogin.conf: PermitRootLogin yes
+# Delete or change that file. Otherwise it wins over anything below it
+```
+
+`/etc/ssh/sshd_config.d/10-lab.conf`:
+
+```text
+PermitRootLogin prohibit-password
+AllowUsers root emma frank
+```
+
+Append the `Match` block at the **very end** of `/etc/ssh/sshd_config`. Everything after a `Match` line belongs to that block until the next `Match` or end of file:
+
+```text
+Match User emma
+    PasswordAuthentication no
+```
+
+```bash
+sudo sshd -t && sudo systemctl reload sshd
+```
+
+**Verify:**
+
+```bash
+sudo sshd -T | grep -Ei 'permitrootlogin|allowusers|passwordauthentication'
+sudo sshd -T -C user=emma,host=charlie,addr=10.20.30.11 | grep -i passwordauthentication   # no
+sudo sshd -T -C user=frank,host=charlie,addr=10.20.30.11 | grep -i passwordauthentication  # yes
+# From charlie:
+ssh -o PubkeyAuthentication=no emma@delta     # Permission denied (publickey,...) — no pw prompt
+```
+
+- **`AllowUsers` is a whitelist.** Anyone not listed, including any admin account you normally use, is locked out over SSH. Add it last, after testing, and keep a console open.
+- `prohibit-password` means root can log in with a **key only**. That's why the root key copy has to happen first.
+- **Wrong permissions break key auth silently.** `~/.ssh` must be `700` and `authorized_keys` `600`. Check `sudo journalctl -u sshd` on delta.
+
+---
+
+**T12 — rsync bwlimit + sftp batch + sha256** *(charlie → delta)*
+
+```bash
+sudo rsync -av --delete --bwlimit=500 -e ssh /etc/skel/ root@delta:/tmp/skel_backup/
+#     -a = -rlptgoD  (recursive, links, perms, times, group, owner, devices)
+#     --bwlimit units = KiB/s
+#     trailing slash on /etc/skel/ = copy the CONTENTS, not a skel/ subdirectory
+
+sudo tee /root/sftp_batch.txt > /dev/null <<'EOF'
+put /etc/hostname /tmp/
+bye
+EOF
+sudo sftp -b /root/sftp_batch.txt root@delta    # batch mode requires key auth (no prompts)
+
+sha256sum /etc/hostname
+sudo ssh root@delta sha256sum /tmp/hostname     # compare the UPLOADED copy, not delta's own /etc/hostname
+```
+
+**Verify:**
+
+```bash
+sudo ssh root@delta 'ls -la /tmp/skel_backup/'
+diff <(sha256sum < /etc/hostname) <(sudo ssh root@delta 'sha256sum < /tmp/hostname') && echo MATCH
+```
+
+- **A trailing slash on the source changes the result.** `/etc/skel/` copies the **contents**. `/etc/skel` creates `/tmp/skel_backup/skel/`.
+- `--delete` removes destination files that aren't in the source. Test with `-n` (dry run) first.
+- `sftp -b` aborts on the first failed command. Prefix a command with `-` (e.g. `-mkdir /tmp/x`) to ignore its errors.
 
 ---
 
 ### Section 5 — Software Management
 
-**T13 — Two repo files + GPG**
+**T13 — Two repo files + GPG import** *(charlie)*
 
 ```bash
-dnf --disablerepo="*" --enablerepo="lab-baseos" list available | head
+sudo mkdir -p /mnt/rhel10
+sudo mount -o ro /dev/sr0 /mnt/rhel10
+# Persist it (or the repos break after reboot):
+echo '/dev/sr0  /mnt/rhel10  iso9660  ro,nofail  0 0' | sudo tee -a /etc/fstab
+# If using an ISO file instead:  /root/rhel10.iso  /mnt/rhel10  iso9660  loop,ro,nofail  0 0
+sudo systemctl daemon-reload
+ls /mnt/rhel10                       # BaseOS  AppStream  RPM-GPG-KEY-redhat-release ...
+
+sudo rpm --import /mnt/rhel10/RPM-GPG-KEY-redhat-release
 ```
 
-**T14 — Flatpak remote**
+`/etc/yum.repos.d/lab-baseos.repo`:
+
+```ini
+[lab-baseos]
+name=Lab RHEL 10 BaseOS
+baseurl=file:///mnt/rhel10/BaseOS
+enabled=1
+gpgcheck=1
+gpgkey=file:///mnt/rhel10/RPM-GPG-KEY-redhat-release
+metadata_expire=1h
+priority=10
+```
+
+`/etc/yum.repos.d/lab-appstream.repo`:
+
+```ini
+[lab-appstream]
+name=Lab RHEL 10 AppStream
+baseurl=file:///mnt/rhel10/AppStream
+enabled=1
+gpgcheck=1
+gpgkey=file:///mnt/rhel10/RPM-GPG-KEY-redhat-release
+metadata_expire=1h
+priority=20
+```
 
 ```bash
-flatpak remote-add --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+sudo dnf clean all
+dnf repolist enabled
+dnf --disablerepo='*' --enablerepo=lab-baseos list --available | head
+# or: dnf repository-packages lab-baseos list --available | head
 ```
 
-**T15 — RPM verify / reinstall**
+**Verify:**
 
 ```bash
-rpm -V nano                 # clean = no output
-# after editing /etc/nanorc:
-rpm -V nano                 # S.5....T.  c /etc/nanorc
-dnf reinstall nano
-rpm -qf /etc/hosts
-rpm -ql chrony
-rpm -qa --last | head
+rpm -qa gpg-pubkey* --qf '%{NAME}-%{VERSION}  %{SUMMARY}\n'   # Red Hat key present
+dnf repoinfo lab-baseos | grep -Ei 'priority|expire|status'
+sudo dnf install -y nano               # succeeds without a GPG prompt
 ```
+
+- **No priorities plugin needed.** `priority=` is built into dnf on RHEL 8+, and RHEL 10 ships dnf 4.20. A lower number means higher priority. The default is 99.
+- **`baseurl` needs three slashes:** `file://` plus the absolute path `/mnt/...`.
+- **The section header `[lab-baseos]` is the repo ID.** That's what `--enablerepo` and `dnf repolist` show, not the filename.
+- If the system is also registered with `subscription-manager`, the CDN repos show up too. That's fine. To see only the lab repos: `sudo subscription-manager config --rhsm.manage_repos=0`.
+
+**Delta needs repos too.** The task only names charlie, but delta has no package source otherwise (Task 2 GUI, Task 21 `nfs-utils`). The DVD is attached to delta as `/dev/sr0`. On delta:
+
+```bash
+sudo mkdir -p /mnt/rhel10
+echo '/dev/sr0  /mnt/rhel10  iso9660  ro,nofail  0 0' | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload
+sudo mount /mnt/rhel10
+sudo rpm --import /mnt/rhel10/RPM-GPG-KEY-redhat-release
+```
+
+Then, from charlie (root SSH works after Task 11; before that, scp asks for delta's root password):
+
+```bash
+sudo scp /etc/yum.repos.d/lab-*.repo root@delta:/etc/yum.repos.d/
+sudo ssh root@delta dnf repolist
+```
+
+The repo files point at `/mnt/rhel10`, so they work unchanged as long as delta uses the same mount point.
+
+---
+
+**T14 — Flatpak** *(charlie)*
+
+```bash
+sudo dnf install -y flatpak
+sudo flatpak remote-add --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+# --system is the default when run as root; --user would make it per-user
+flatpak remotes --show-details          # flathub ... system
+flatpak search gedit
+sudo flatpak install -y flathub org.gnome.gedit
+flatpak list --app
+flatpak run org.gnome.gedit             # (only on a GUI session)
+sudo flatpak uninstall -y org.gnome.gedit
+sudo flatpak uninstall -y --unused      # remove runtimes nothing depends on any more
+```
+
+Offline: write those commands into `/root/flatpak_procedure.txt`.
+
+- Use **the same scope throughout**. An app installed `--system` won't show in `flatpak list --user`.
+- RHEL 10 may already have a Red Hat `rhel` remote configured (registry.redhat.io), which needs registry login. `flatpak remotes` shows what's there.
+
+---
+
+**T15 — RPM verify / tamper / restore** *(charlie)*
+
+```bash
+sudo dnf install -y nano
+rpm -q nano                       # record e.g. nano-8.1-3.el10.x86_64
+rpm -V nano                       # no output = clean
+
+echo '# lab edit' | sudo tee -a /etc/nanorc
+rpm -V nano                       # S.5....T.  c /etc/nanorc
+#                                   S=size  5=digest(checksum)  T=mtime  c=config file
+
+# RESTORE: 'dnf reinstall nano' alone does NOT fix it. See note below
+sudo mv /etc/nanorc /root/nanorc.modified # (or rm)
+sudo dnf reinstall -y nano
+rpm -V nano                       # clean again
+
+rpm -qf /etc/hosts                # setup-*
+rpm -ql chrony                    # every file in the package
+rpm -qc chrony                    # just its config files (bonus)
+rpm -qa --last | head             # newest installs first
+```
+
+- **Why plain `dnf reinstall` doesn't restore the file:** `/etc/nanorc` is packaged as `%config(noreplace)` (check with `rpm -q --qf '[%{FILEFLAGS:fflags} %{FILENAMES}\n]' nano | grep etc`, which shows `cn`). On reinstall, RPM sees the packaged file is unchanged between "old" and "new", and a modified config file is **left alone** to protect your edits. Remove or move the file first, then reinstall.
+- Another way, without reinstalling: `dnf download nano && rpm2cpio nano-*.rpm | cpio -idv ./etc/nanorc` (as your own user, in a scratch directory), then `sudo cp etc/nanorc /etc/nanorc`.
+- `rpm -V` flags: `S` size, `M` mode, `5` digest, `D` device, `L` symlink, `U` user, `G` group, `T` mtime, `P` capabilities. A `.` means the test passed.
+- `sudo rpm --restore nano` resets **ownership, mode and timestamps only**, not file contents.
 
 ---
 
 ### Section 6 — Storage
 
-**T16 — parted scripted**
+**T16 — GPT partitions with `parted -s`** *(charlie, /dev/vdb)*
 
 ```bash
-parted -s /dev/vdb mklabel gpt
-parted -s /dev/vdb mkpart primary xfs 1MiB 2049MiB
-parted -s /dev/vdb mkpart primary linux-swap 2049MiB 3073MiB
-parted -s /dev/vdb mkpart primary 3073MiB 100%
-parted -s /dev/vdb set 3 lvm on
+lsblk /dev/vdb                                    # confirm it's the empty 8 GB disk
+sudo parted -s /dev/vdb mklabel gpt
+sudo parted -s /dev/vdb mkpart charliexfs xfs 1MiB 2049MiB
+sudo parted -s /dev/vdb mkpart charlieswap linux-swap 2049MiB 3073MiB
+sudo parted -s /dev/vdb mkpart charlielvm 3073MiB 100%
+sudo parted -s /dev/vdb set 3 lvm on
+sudo parted /dev/vdb align-check optimal 1        # "1 aligned"
+sudo partprobe /dev/vdb
 ```
 
-**T20 — pvmove, vgreduce, extend**
-
-`lv_stripe` is striped 2-way across `vdb3` and `vdd`, so a plain `pvmove` has nowhere to put its extents once `vdd` is gone — LVM needs as many target PVs as stripes unless you force it. `--alloc anywhere` collapses it onto the single remaining PV, and `lv_stripe`'s segment type becomes linear.
+**Verify:**
 
 ```bash
-pvmove --alloc anywhere /dev/vdd
-vgreduce vg_lab2 /dev/vdd
-pvremove /dev/vdd
-lvextend -l +100%FREE -r /dev/vg_lab2/lv_home2
+sudo parted -s /dev/vdb unit MiB print            # 3 partitions, flag lvm on #3
+lsblk /dev/vdb
 ```
+
+- **On GPT the first `mkpart` argument is a partition name, not a type.** Write something meaningful (`primary` also works, but it's just a label on GPT).
+- **The fs-type argument only sets a type hint.** It doesn't create a filesystem. You still run `mkfs` (Task 17).
+- Starting at `1MiB` gives correct alignment. Using `MiB` units, not `MB` (powers of 10), avoids "not aligned" warnings.
+- Optional, since the swap partition `vdb2` isn't used by a later task: `sudo mkswap /dev/vdb2`.
 
 ---
 
-### Section 7 — NFS & AutoFS
+**T17 — XFS by UUID + VFAT by LABEL** *(charlie)*
 
-**T21 — NFSv4-only exports**
+```bash
+sudo mkfs.xfs -L charlieXFS /dev/vdb1              # XFS labels max 12 chars
 
-`/etc/nfs.conf`: under `[nfsd]` set `vers3=n`, `vers4=y`, `vers4.2=y`.
+sudo dnf install -y dosfstools                     # mkfs.vfat isn't on a minimal install
+sudo parted -s /dev/vdc mklabel gpt
+sudo parted -s /dev/vdc mkpart usbdata fat32 1MiB 501MiB
+sudo partprobe /dev/vdc
+sudo mkfs.vfat -n USBDATA /dev/vdc1                # FAT labels: ≤11 chars, stored UPPERCASE
+
+sudo mkdir -p /mnt/charliexfs /mnt/usbdata
+sudo blkid /dev/vdb1 /dev/vdc1                     # copy the UUID
+```
+
+`/etc/fstab`:
 
 ```text
+UUID=<uuid-of-vdb1>   /mnt/charliexfs   xfs    defaults               0 0
+LABEL=USBDATA         /mnt/usbdata      vfat   noexec,nodev,nosuid    0 0
+```
+
+```bash
+# tip: get the UUID into fstab without retyping it:
+#   echo "UUID=$(sudo blkid -s UUID -o value /dev/vdb1) /mnt/charliexfs xfs defaults 0 0" | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload     # do this BEFORE mount -a so systemd sees the new fstab
+sudo mount -a
+sudo findmnt --verify            # catches typos before you reboot
+```
+
+**Verify (after reboot):**
+
+```bash
+findmnt /mnt/charliexfs; findmnt -no OPTIONS /mnt/usbdata    # rw,nosuid,nodev,noexec,...
+lsblk -f /dev/vdb /dev/vdc
+```
+
+- **Run `sudo findmnt --verify` (or `sudo mount -a`) before rebooting.** A bad fstab line drops the system into emergency mode at boot.
+- **VFAT has no Unix ownership or permissions.** Use the mount options `uid=`, `gid=`, `umask=` if a non-root user needs to write.
+
+---
+
+**T18 — Swap file, priority 20** *(delta)*
+
+```bash
+sudo mkdir -p /swap
+sudo dd if=/dev/zero of=/swap/extraswap.img bs=1M count=1024 status=progress
+# fallocate -l 1G /swap/extraswap.img   ← also fine on XFS/ext4
+sudo chmod 0600 /swap/extraswap.img
+sudo mkswap /swap/extraswap.img
+
+# SELinux: label the file so the boot-time swapon (systemd swap unit) is allowed to use it
+sudo semanage fcontext -a -t swapfile_t '/swap/extraswap\.img'
+sudo restorecon -v /swap/extraswap.img
+
+echo '/swap/extraswap.img  none  swap  defaults,pri=20  0 0' | sudo tee -a /etc/fstab
+sudo systemctl daemon-reload
+sudo swapon -a
+```
+
+**Verify:**
+
+```bash
+swapon --show            # /swap/extraswap.img  file  1024M  0B  20
+free -h
+ls -lZ /swap/extraswap.img
+```
+
+- **`swapon -a` won't touch swap that's already active.** If you activated it manually with the wrong priority, `sudo swapoff /swap/extraswap.img` first, then `sudo swapon -a`.
+- **Swap files must not be sparse.** `dd` from `/dev/zero` is always safe. `fallocate` is safe on XFS/ext4. Never use `truncate`, which creates a sparse file.
+- **Swap gets used by priority.** Higher priority is used first, and devices with **equal** priority are used round-robin.
+
+---
+
+**T19 — Striped LV + 32 MiB PE** *(charlie)*
+
+```bash
+sudo pvcreate /dev/vdb3 /dev/vdd
+sudo vgcreate -s 32M vg_lab2 /dev/vdb3 /dev/vdd
+sudo lvcreate --type striped -i 2 -L 1G -n lv_stripe vg_lab2     # -i stripes; -I sets stripe size (default 64k)
+sudo lvcreate -l 80 -n lv_home2 vg_lab2                     # 80 × 32 MiB = 2.5 GiB
+
+sudo mkfs.ext4 /dev/vg_lab2/lv_stripe
+sudo mkfs.xfs  /dev/vg_lab2/lv_home2
+sudo mkdir -p /mnt/stripe /mnt/home2
+```
+
+`/etc/fstab`:
+
+```text
+/dev/mapper/vg_lab2-lv_stripe   /mnt/stripe   ext4   defaults   0 0
+/dev/mapper/vg_lab2-lv_home2    /mnt/home2    xfs    defaults   0 0
+```
+
+```bash
+sudo systemctl daemon-reload && sudo mount -a
+```
+
+**Verify:**
+
+```bash
+sudo pvs; sudo vgs -o+vg_extent_size
+sudo lvs -a -o+devices,segtype,stripes
+#  lv_stripe  ... striped  2   /dev/vdb3(0),/dev/vdd(0)
+#  lv_home2   ... linear   1   /dev/vdb3(16)
+df -hT /mnt/stripe /mnt/home2
+```
+
+- **`-L` takes a size; `-l` takes a number of extents** (or `%VG`, `%FREE`). With a 32 MiB PE, `-l 80` = 2.5 GiB.
+- **A striped LV needs free extents on as many PVs as it has stripes.** `-i 2` with only one PV with free space fails.
+- LVM paths are stable, so `/dev/mapper/...` in fstab is fine. Using the filesystem UUID is also correct.
+
+---
+
+**T20 — `pvmove`, `vgreduce`, extend to 100% FREE** *(charlie)*
+
+**Why a plain `pvmove /dev/vdd` fails:** the stripes of `lv_stripe` must sit on **different** PVs under the default `normal` allocation policy. Once vdd is excluded, the only PV left is vdb3, which already holds the other stripe. LVM reports *"Insufficient suitable allocatable extents"*. `--alloc anywhere` lifts the "parallel areas on separate PVs" rule.
+
+```bash
+sudo pvs -o+pv_used                          # vdd has the 16 extents of lv_stripe's 2nd stripe
+sudo pvmove /dev/vdd                         # fails, as described above
+sudo pvmove --alloc anywhere /dev/vdd        # moves that stripe onto vdb3
+sudo vgreduce vg_lab2 /dev/vdd
+sudo pvremove /dev/vdd
+sudo wipefs -a /dev/vdd                      # clear any remaining signatures
+sudo lvextend -l +100%FREE -r /dev/vg_lab2/lv_home2   # -r = resize the fs too (xfs_growfs, online)
+```
+
+**Verify:**
+
+```bash
+df -h /mnt/home2                             # grown
+sudo lvs -a -o+devices,segtype,stripes
+#  lv_stripe  ... striped  2   /dev/vdb3(..),/dev/vdb3(..)   ← both stripes now on ONE PV
+sudo vgs vg_lab2                             # #PV 1, VFree 0
+lsblk /dev/vdd; sudo wipefs /dev/vdd         # no signatures
+```
+
+- **What happened to `lv_stripe`:** it **still reports segment type `striped`** with 2 stripes, but both stripes now live on `/dev/vdb3`. The layout is "striped" in name only: no performance gain, and no protection either way. To make it truly linear you'd need a conversion such as `sudo lvconvert --type linear` (only some segment types support it) or recreating the LV.
+- **Shrinking:** XFS can't shrink. The single-command grow is `lvextend -r` (or `lvresize -r`). Without `-r` you'd have to run `sudo xfs_growfs /mnt/home2` yourself.
+- `pvmove` is safe to interrupt. Run `sudo pvmove` with no arguments to resume an interrupted move.
+
+---
+
+### Section 7 — File Systems & NFS
+
+**T21 — NFSv4-only server** *(delta)*
+
+```bash
+sudo dnf install -y nfs-utils    # needs delta's repos (T13 delta note)
+sudo vim /etc/nfs.conf
+#   [nfsd]
+#   vers3=n
+#   vers4=y
+#   vers4.2=y       # (vers4.0 / vers4.1 may stay at their defaults)
+
+sudo mkdir -p /srv/nfs/projects /srv/nfs/archive
+sudo chmod 777 /srv/nfs/projects # see root_squash note — lets charlie's root create files
+
+sudo tee -a /etc/exports > /dev/null <<'EOF'
 /srv/nfs/projects  10.20.30.0/24(rw,sync,sec=sys,no_subtree_check)
 /srv/nfs/archive   charlie.ex200.lab(ro,sync,sec=sys,root_squash)
+EOF
+
+sudo firewall-cmd --permanent --add-service=nfs     # v4 only needs 2049/tcp — no rpc-bind/mountd
+sudo firewall-cmd --reload
+sudo systemctl enable --now nfs-server
+sudo exportfs -rav
 ```
 
-**T22 — NFS client fstab**
+**Verify:**
+
+```bash
+sudo exportfs -v
+sudo cat /proc/fs/nfsd/versions   # -3 +4 +4.1 +4.2
+showmount -e localhost            # may FAIL on a true v4-only server — see note
+sudo mount -t nfs4 localhost:/srv/nfs/projects /mnt && sudo umount /mnt   # real proof the export works
+```
+
+- **`showmount` may fail here.** It uses the NFSv3 **MOUNT** protocol through rpcbind. With `vers3=n`, `rpc.mountd` stops advertising MOUNT v3, so `showmount -e` can fail with *"Program not registered"*. That's evidence v3 is really off. Use `sudo exportfs -v` and an actual `nfs4` test mount instead.
+- **`root_squash` is the default on every export.** charlie's root becomes `nobody` on the server. The task expects root on charlie to **create** a file in projects (Task 22 step 4), so the export directory must be writable by `nobody` (`sudo chmod 777`, or `sudo chown nobody:nobody`), or the export needs `no_root_squash`. Pick one; `chmod 777` is the least invasive.
+- `charlie.ex200.lab` in the exports file must resolve on delta, which the `/etc/hosts` entries from Task 4 take care of.
+- `exportfs -r` re-reads `/etc/exports` without restarting the server.
+
+---
+
+**T22 — NFS client with `_netdev,nofail`** *(charlie)*
+
+```bash
+sudo dnf install -y nfs-utils
+sudo mkdir -p /mnt/projects /mnt/archive
+```
+
+`/etc/fstab`:
 
 ```text
-delta:/srv/nfs/projects  /mnt/projects  nfs4  _netdev,nofail,rw  0 0
-delta:/srv/nfs/archive   /mnt/archive   nfs4  _netdev,nofail,ro  0 0
+delta:/srv/nfs/projects  /mnt/projects  nfs4  rw,_netdev,nofail  0 0
+delta:/srv/nfs/archive   /mnt/archive   nfs4  ro,_netdev,nofail  0 0
 ```
 
-**T23 — AutoFS wildcard indirect map**
+```bash
+sudo systemctl daemon-reload && sudo mount -a
+sudo touch /mnt/projects/root_test && echo "projects RW OK" # owned by nobody (root_squash)
+sudo touch /mnt/archive/root_test                            # Read-only file system
+```
+
+**Verify:**
+
+```bash
+findmnt -t nfs4                     # both mounted, vers=4.2
+nfsstat -m
+ls -l /mnt/projects/root_test       # nobody nobody
+```
+
+- **`_netdev`** tells systemd to wait for the network before mounting. **`nofail`** means the boot doesn't hang or drop to emergency mode if delta is down.
+- **Old-style `host:/path` source.** NFSv4 still accepts the full server path, so use the same path as in `/etc/exports`.
+- `fstype nfs` with `vers=4.2` and `fstype nfs4` both work. The task says `nfs4`.
+
+---
+
+**T23 — AutoFS wildcard indirect map** *(delta then charlie)*
+
+delta:
+
+```bash
+sudo mkdir -p /srv/nfs/homes/emma
+sudo chown 2100:6000 /srv/nfs/homes/emma && sudo chmod 700 /srv/nfs/homes/emma
+echo '/srv/nfs/homes  10.20.30.0/24(rw,sync,no_subtree_check)' | sudo tee -a /etc/exports
+sudo exportfs -rav
+```
+
+charlie:
+
+```bash
+sudo dnf install -y autofs
+
+# RHEL's default /etc/auto.master has an ACTIVE line:   /net  -hosts
+# That already claims /net, so /net/homes would be treated as an NFS server called "homes".
+# Comment it out:
+sudo sed -i 's|^/net|#/net|' /etc/auto.master
+```
 
 `/etc/auto.master.d/labhome.autofs`:
 
@@ -904,63 +1708,229 @@ delta:/srv/nfs/archive   /mnt/archive   nfs4  _netdev,nofail,ro  0 0
 `/etc/auto.labhome`:
 
 ```text
-*  -fstype=nfs4,rw,soft  delta.ex200.lab:/srv/nfs/homes/&
+*  -fstype=nfs4,rw  delta.ex200.lab:/srv/nfs/homes/&
 ```
-
-**T24 — SUID inventory**
 
 ```bash
-find /usr/bin -perm -4000 -type f > /root/suid_list.txt
+sudo systemctl enable --now autofs
+su - emma
+ls /net/homes/emma          # triggers the mount
+exit
+mount | grep /net/homes     # delta.ex200.lab:/srv/nfs/homes/emma on /net/homes/emma
+sleep 75; mount | grep /net/homes   # gone after the 60s idle timeout
 ```
 
-> Heads up: the Linux kernel ignores the setuid bit on shebang scripts, so step 3's `4754` on `run_report.sh` sets the bit correctly but will not actually elevate privilege at exec time.
+- **`*` and `&` do the wildcard work.** `*` matches any key (the directory name being accessed) and `&` substitutes that key into the source path.
+- **`--ghost` does nothing for a `*` map.** Browse mode only pre-creates directories for **explicit** keys, and a wildcard has none. You won't see `/net/homes/emma` in `ls /net/homes` until it's accessed. That's expected, not a fault.
+- **Don't create `/net/homes` yourself.** autofs creates and owns its mount points.
+- `--timeout=60` is in seconds. The `/etc/autofs.conf` default is 300.
+- Debug with `systemctl status autofs` and `sudo journalctl -u autofs`, or stop the service and run `sudo automount -f -v` in the foreground.
+
+---
+
+**T24 — Permission repair** *(charlie)*
+
+> **Setup** (no lab script creates the broken state, so build it first):
+>
+> ```bash
+> sudo mkdir -p /opt/finance/{reports,bin,private}
+> printf '#!/bin/bash\necho report\n' | sudo tee /opt/finance/bin/run_report.sh > /dev/null
+> sudo chmod 000 /opt/finance
+> ```
+
+```bash
+sudo chown gina:ops /opt/finance
+sudo chmod 2750 /opt/finance
+
+sudo chgrp ops /opt/finance/reports
+sudo chmod 2770 /opt/finance/reports     # 'g+s' is the required part; 2770 is a sensible full mode
+
+sudo chown gina /opt/finance/bin/run_report.sh
+sudo chmod 4754 /opt/finance/bin/run_report.sh
+
+sudo chown gina:gina /opt/finance/private
+sudo chmod 0700 /opt/finance/private
+
+find /usr/bin -type f -perm -4000 | sudo tee /root/suid_list.txt > /dev/null
+```
+
+**Verify:**
+
+```bash
+sudo stat -c '%A %a %U:%G %n' /opt/finance /opt/finance/reports /opt/finance/bin/run_report.sh /opt/finance/private
+#  drwxr-s--- 2750 gina:ops   /opt/finance
+#  drwxrws--- 2770 gina:ops   /opt/finance/reports
+#  -rwsr-xr-- 4754 gina:...   /opt/finance/bin/run_report.sh
+#  drwx------ 700  gina:gina  /opt/finance/private
+sudo cat /root/suid_list.txt             # passwd, sudo, su, mount, chage, ...
+```
+
+- **`-perm -4000` vs `-perm /4000`:** `-4000` means "at least these bits". `/4000` means "any of these bits", which is the same thing for a single bit.
+- **Order matters: `chown` clears SUID/SGID** on files. Do `chown` first and `chmod 4754` second.
+- **Setuid does nothing on scripts.** The Linux kernel ignores the setuid bit on shebang scripts, so `4754` on `run_report.sh` sets the bit correctly but won't actually elevate privilege at exec time.
+- **SGID on a directory** makes new files inherit the directory's group. The capital `S` in `ls` output means SGID is set but group-execute isn't.
 
 ---
 
 ### Section 8 — Services, Logging & Time
 
-**T25 — Chrony server**
+**T25 — Chrony server + client**
 
-On delta, add `allow 10.20.30.0/24` to `/etc/chrony.conf`. On charlie, comment out the pool/server defaults and add `server delta.ex200.lab iburst`.
+delta (`/etc/chrony.conf`, then):
 
-**T27 — Process management**
-
-```bash
-openssl speed -multi 2 &
-dd if=/dev/zero of=/dev/shm/memtest bs=1M count=800 &
-# or: stress-ng --vm 1 --vm-bytes 800M --timeout 60s &
-free -h
-rm -f /dev/shm/memtest      # tmpfs file stays resident after dd exits
-
-ps -eo pid,pri,ni,pcpu,comm --sort=-pcpu | head
-renice -n 19 -p <pid>
-systemd-run --scope -p CPUQuota=20% stress-ng --cpu 1 --timeout 30s
-pkill -f stress-ng
-pkill -f openssl
-sudo kill -HUP $(pgrep chronyd)
-journalctl -u chronyd -n 20
+```text
+allow 10.20.30.0/24
+local stratum 10        # serve time even if delta has no upstream (isolated lab)
 ```
 
-**T28 — Journal forwarding + logrotate**
+```bash
+sudo systemctl enable --now chronyd && sudo systemctl restart chronyd
+sudo firewall-cmd --permanent --add-service=ntp && sudo firewall-cmd --reload
+sudo timedatectl set-timezone Asia/Tokyo
+```
 
-RHEL 10 has no `/etc/systemd/journald.conf` by default, so use a drop-in:
+charlie (`/etc/chrony.conf`):
+
+```text
+#pool 2.rhel.pool.ntp.org iburst      ← comment out every pool/server line
+#sourcedir /run/chrony-dhcp           ← and DHCP-provided servers, so delta is the ONLY source
+server delta.ex200.lab iburst
+```
+
+```bash
+sudo systemctl restart chronyd
+sudo timedatectl set-timezone Europe/London
+```
+
+**Verify (charlie):**
+
+```bash
+chronyc sources -v          # ^* delta.ex200.lab  (^+ / ^- acceptable; ^? = unreachable)
+chronyc tracking
+timedatectl                 # Time zone: Europe/London; NTP service: active
+# on delta:
+sudo chronyc clients        # charlie listed
+```
+
+- **Without `local stratum 10`, delta may refuse to serve.** In an isolated lab delta can't reach the internet, so it isn't synchronised itself and its clients see it as `^?` or `^x`. `local stratum 10` makes it serve its own clock.
+- **`^*` is not instant.** `iburst` speeds up the first sync, but give it 30–60 seconds.
+- Timezone names come from `timedatectl list-timezones`.
+
+---
+
+**T26 — Custom tuned profile** *(charlie)*
+
+```bash
+sudo dnf install -y tuned
+sudo systemctl enable --now tuned
+sudo mkdir -p /etc/tuned/profiles/lab-highio
+```
+
+`/etc/tuned/profiles/lab-highio/tuned.conf`:
+
+```ini
+[main]
+summary=Lab high-IO profile based on throughput-performance
+include=throughput-performance
+
+[sysctl]
+vm.dirty_ratio=40
+vm.swappiness=10
+
+[cpu]
+governor=performance
+```
+
+```bash
+tuned-adm list | grep lab-highio
+sudo tuned-adm profile lab-highio
+```
+
+**Verify:**
+
+```bash
+tuned-adm active            # Current active profile: lab-highio
+sudo tuned-adm verify       # "Verification succeeded" (cpu governor may warn inside a VM)
+sysctl vm.swappiness vm.dirty_ratio     # 10 / 40
+cat /etc/tuned/active_profile           # persists across reboot via this file
+```
+
+- **Where custom profiles live:** tuned 2.23+ (RHEL 10 ships 2.27) reads them from **`/etc/tuned/profiles/<name>/`**. Older RHEL used `/etc/tuned/<name>/`, which still works as a fallback.
+- **Child values override parent values.** Settings in your file win over the same keys from `include=`d profiles.
+- **The governor may not apply in a VM.** Most VMs expose no `cpufreq`, so the `[cpu]` governor is skipped. That's harmless.
+- **Don't also set these in `/etc/sysctl.d/`.** tuned applies its values at startup and can conflict with your file.
+
+---
+
+**T27 — Process management** *(charlie)*
+
+```bash
+openssl speed -multi 2 &> /dev/null &
+dd if=/dev/zero of=/dev/shm/memtest bs=1M count=800      # fills 800 MiB of RAM-backed tmpfs
+# or: stress-ng --vm 1 --vm-bytes 800M --timeout 60s &
+free -h                                  # 'shared' and 'buff/cache' jump by ~800M
+rm -f /dev/shm/memtest                   # the tmpfs file stays in RAM after dd exits; free it
+
+ps -eo pid,ppid,ni,pcpu,pmem,comm --sort=-pcpu | head -5   # top CPU consumers
+# (memory: --sort=-pmem  or  top, then 'M')
+
+renice -n 19 -p <pid>                    # default nice is 0 → 19 (lowest priority)
+ps -o pid,ni,comm -p <pid>
+# Starting a process at a given nice level: nice -n 19 CMD
+
+sudo systemd-run --scope -p CPUQuota=20% stress-ng --cpu 1 --timeout 60s &
+# or with no stress-ng:  sudo systemd-run --scope -p CPUQuota=20% sha1sum /dev/zero &
+top                                      # that process stays at ~20% CPU
+
+sudo pkill -f stress-ng
+pkill -f 'openssl speed'                 # -f matches the full command line
+pgrep -af 'stress-ng|openssl speed'      # nothing left
+```
+
+**Step 7, SIGHUP:** see note. Use `sshd`, which reloads its config on SIGHUP:
+
+```bash
+sudo kill -HUP "$(cat /run/sshd.pid)"      # or: sudo pkill -HUP -x sshd  /  sudo systemctl reload sshd
+sudo journalctl -u sshd -n 5             # "Received SIGHUP; restarting."
+```
+
+- **Don't send SIGHUP to chronyd.** It treats SIGHUP like SIGTERM: it **exits** (journal: `chronyd exiting`) instead of re-reading `/etc/chrony.conf`. If you already did it, `sudo systemctl start chronyd`. Daemons that do reload on HUP: `sshd`, `rsyslogd` (reopens log files), `httpd` (graceful restart via `systemctl reload`).
+- **Only root can lower a nice value** (raise priority). Regular users can only raise it.
+- **Use a precise pattern with `pkill -f`.** `pkill -f openssl` also kills anything else whose command line mentions "openssl". Check first with `pgrep -af PATTERN`.
+- `kill` sends SIGTERM (15) by default. Use `-9` (SIGKILL) only when a process ignores TERM.
+- **Persistent CPU limits** go on a unit: `sudo systemctl set-property httpd.service CPUQuota=20%`.
+
+---
+
+**T28 — Persistent journal + rsyslog + logrotate** *(charlie)*
+
+RHEL 10 has no `/etc/systemd/journald.conf` by default (defaults live in `/usr/lib/systemd/journald.conf`), so use a drop-in:
 
 ```bash
 sudo mkdir -p /etc/systemd/journald.conf.d
-sudo tee /etc/systemd/journald.conf.d/lab.conf <<'EOF'
+sudo tee /etc/systemd/journald.conf.d/lab.conf > /dev/null <<'EOF'
 [Journal]
 Storage=persistent
 SystemMaxUse=500M
 ForwardToSyslog=yes
 EOF
-# T10's 0027 umask (if student is in ops) combines with sudo's 0022 => 750/640;
-# restore the standard /etc permissions so non-root tools can read the drop-in
+# If you're working as an ops member via sudo, T10's 0027 umask gives 750/640 here.
+# Restore the standard /etc permissions so non-root tools can read the drop-in:
 sudo chmod 755 /etc/systemd/journald.conf.d
 sudo chmod 644 /etc/systemd/journald.conf.d/lab.conf
 sudo systemctl restart systemd-journald
 ```
 
-rsyslog rule: `authpriv.*    /var/log/secure.lab`
+`/etc/rsyslog.d/secure-lab.conf`:
+
+```text
+authpriv.*    /var/log/secure.lab
+```
+
+```bash
+sudo rsyslogd -N1                     # syntax check
+sudo systemctl restart rsyslog
+```
 
 `/etc/logrotate.d/secure.lab`:
 
@@ -972,56 +1942,401 @@ rsyslog rule: `authpriv.*    /var/log/secure.lab`
     notifempty
     compress
     delaycompress
+    postrotate
+        /usr/bin/systemctl kill -s HUP rsyslog.service >/dev/null 2>&1 || true
+    endscript
 }
 ```
 
 ```bash
-journalctl _COMM=sudo
-journalctl --vacuum-time=7d
+sudo logrotate -d /etc/logrotate.d/secure.lab    # dry-run/debug, no changes made
+
+# Test: failed sudo as frank
+sudo -u frank sudo -k /usr/bin/systemctl restart httpd   # type a WRONG password at frank's prompt
+sudo journalctl _COMM=sudo -n 5        # "incorrect password attempt"
+sudo tail /var/log/secure.lab
+
+sudo journalctl --vacuum-time=7d
 ```
 
-**T29 — Timer every 3 hours**
+**Verify:**
 
-`OnCalendar=*-*-* 00/3:00:00` with `Persistent=true`. Weekday cron for emma: `15 7 * * 1-5 df -h > ~/disk_report.log`.
+```bash
+ls /var/log/journal/                  # machine-id directory exists
+sudo journalctl --disk-usage
+sudo journalctl --list-boots          # more than one boot listed after a reboot
+systemd-analyze cat-config systemd/journald.conf | grep -E 'Storage|SystemMaxUse|ForwardToSyslog'
+```
+
+- **`ForwardToSyslog` isn't how RHEL's rsyslog gets journal entries.** RHEL's rsyslog reads the journal **directly** with the `imjournal` module, so `/var/log/secure` etc. fill up even with `ForwardToSyslog=no`. The task asks for forwarding, so set it, but it's not why `secure.lab` gets entries.
+- **`postrotate` HUPs rsyslog** so it reopens the new file. Without it, rsyslog keeps writing to the rotated file. The stock `/etc/logrotate.d/rsyslog` does the same thing.
+- `Storage=persistent` creates `/var/log/journal` automatically. The manual method is `sudo mkdir /var/log/journal && sudo systemd-tmpfiles --create --prefix /var/log/journal`.
+- Other ways to match the sudo entries: `sudo journalctl -t sudo`, `sudo journalctl SYSLOG_FACILITY=10` (authpriv).
+
+---
+
+**T29 — at + cron + systemd timer** *(charlie)*
+
+```bash
+# at
+sudo dnf install -y at && sudo systemctl enable --now atd
+echo 'echo "at-fired $(date)" >> /var/log/at_lab.log' | sudo at now + 3 minutes
+sudo atq                                  # job queued
+# (single quotes: $(date) is evaluated when the job RUNS, not when you schedule it)
+
+# cron for emma
+sudo crontab -e -u emma
+#   15 7 * * 1-5  df -h > ~/disk_report.log
+sudo crontab -l -u emma
+```
+
+`/usr/local/bin/labhealth.sh`:
+
+```bash
+#!/bin/bash
+{
+  echo "=== $(date) ==="
+  uptime
+  free -m
+  df -h /
+} >> /var/log/labhealth.log
+```
+
+`/etc/systemd/system/labhealth.service`:
+
+```ini
+[Unit]
+Description=Lab health snapshot
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/labhealth.sh
+```
+
+`/etc/systemd/system/labhealth.timer`:
+
+```ini
+[Unit]
+Description=Run labhealth every 3 hours
+
+[Timer]
+OnCalendar=*-*-* 00/3:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+```bash
+sudo chmod 755 /usr/local/bin/labhealth.sh
+sudo systemctl daemon-reload
+sudo systemctl enable --now labhealth.timer    # enable the TIMER, not the service
+sudo systemctl start labhealth.service    # test run now
+```
+
+**Verify:**
+
+```bash
+systemctl list-timers --all | grep labhealth
+systemd-analyze calendar '*-*-* 00/3:00:00'    # next elapse: next multiple of 3h
+cat /var/log/labhealth.log
+systemctl status labhealth.service             # inactive (dead), status=0/SUCCESS
+```
+
+- **`00/3` means start at 00 and repeat every 3 hours:** 00, 03, 06, … 21. `OnUnitActiveSec=3h` is a relative alternative, but `OnCalendar` + `Persistent=true` is what the task wants.
+- **`Persistent=true`** runs a missed job at the next boot if the system was off when it was due. It only works with `OnCalendar`.
+- **Cron fields:** `minute hour day-of-month month day-of-week`. `1-5` = Mon–Fri.
+- In cron, `~` works because cron runs commands with `/bin/sh` and sets `HOME`. `%` is special in crontab lines; escape it as `\%`.
 
 ---
 
 ### Section 9 — Scripting
 
-**T31 — Random password**
+**T30 — `svcctl.sh` with `case`**
 
-`openssl rand -base64 12` yields a 16-character base64 string.
+`/usr/local/bin/svcctl.sh`:
 
-**T32 — Cron "every day except the 1st"**
+```bash
+#!/bin/bash
+# Usage: svcctl.sh <start|stop|restart|status|check> <service>
 
-Cron has no "except" operator — use a day-of-month range: `0 6 2-31 * * /root/health_report.sh`
+usage() { echo "Usage: $(basename "$0") <start|stop|restart|status|check> <service>" >&2; }
+
+if [[ $# -ne 2 ]]; then
+    usage
+    exit 2
+fi
+
+action=$1
+svc=$2
+
+case "$action" in
+    start|stop|restart|status|check) ;;     # valid; fall through to the service check
+    *) usage; exit 2 ;;
+esac
+
+if ! systemctl cat "$svc" &>/dev/null; then
+    echo "Unknown service" >&2
+    exit 3
+fi
+
+case "$action" in
+    start|stop|restart)
+        systemctl "$action" "$svc"
+        exit $?
+        ;;
+    status)
+        systemctl status "$svc" --no-pager
+        exit $?
+        ;;
+    check)
+        if systemctl is-active --quiet "$svc"; then
+            echo "RUNNING"; exit 0
+        else
+            echo "STOPPED"; exit 1
+        fi
+        ;;
+esac
+```
+
+```bash
+sudo chmod 755 /usr/local/bin/svcctl.sh
+svcctl.sh check sshd; echo $?           # RUNNING 0
+svcctl.sh bogus sshd; echo $?           # usage on stderr, 2
+svcctl.sh check nosuchsvc; echo $?      # Unknown service, 3
+svcctl.sh check 2>/dev/null; echo $?    # wrong arg count → 2
+bash -x /usr/local/bin/svcctl.sh check chronyd
+```
+
+- **The exit code is whatever the last command returned.** `exit $?` after `systemctl` passes its code through. `systemctl status` returns 3 for an inactive unit, which is correct behaviour.
+- **Send errors to stderr with `>&2`.** The test is `svcctl.sh bogus x 2>/dev/null` printing nothing.
+- **Pick an order and be consistent.** The task doesn't say whether to validate the action or the service first. Checking the action first avoids calling `systemctl` with junk.
+
+---
+
+**T31 — CSV `while read` user creation**
+
+```bash
+sudo tee /root/newusers.csv > /dev/null <<'EOF'
+# username,uid,gid,fullname
+ivan,2200,6000,Ivan Petrov
+julia,2201,6000,Julia Kim
+
+kai,2202,6001,Kai Nguyen
+EOF
+```
+
+`/usr/local/bin/csv_users.sh`:
+
+```bash
+#!/bin/bash
+infile=/root/newusers.csv
+pwfile=/root/passwords.txt
+
+[[ -r $infile ]] || { echo "Cannot read $infile" >&2; exit 1; }
+
+touch "$pwfile"
+chmod 0600 "$pwfile"
+
+while IFS=, read -r username uid gid fullname || [[ -n $username ]]; do
+    [[ -z $username || $username == \#* ]] && continue      # skip blank + comment lines
+
+    if id "$username" &>/dev/null; then
+        echo "Skipping $username: already exists" >&2
+        continue
+    fi
+
+    useradd -u "$uid" -g "$gid" -c "$fullname" -m "$username" || continue
+    password=$(openssl rand -base64 12)
+    echo "${username}:${password}" | chpasswd
+    echo "${username},${password}" >> "$pwfile"
+done < "$infile"
+```
+
+```bash
+sudo chmod 700 /usr/local/bin/csv_users.sh
+sudo /usr/local/bin/csv_users.sh
+getent passwd ivan julia kai
+sudo ls -l /root/passwords.txt; sudo cat /root/passwords.txt
+```
+
+- **`IFS=,` applies only to the `read`,** and the last variable (`fullname`) absorbs the rest of the line, spaces included.
+- **`-r` stops `read` from treating backslashes as escapes.**
+- **`|| [[ -n $username ]]` handles a missing final newline.** Without it, a last line with no trailing newline is silently skipped.
+- **`== \#*` inside `[[ ]]` is a glob match** ("starts with #"). The `#` has to be escaped or quoted.
+- **`< "$infile"` after `done` feeds the loop directly.** Avoid `cat file | while read`, which runs the loop in a subshell.
+- **Create the passwords file first.** `touch` + `chmod 600` before writing means there's never a moment when passwords are world-readable.
+- `openssl rand -base64 12` gives a 16-character password: 12 random bytes, base64-encoded.
+
+---
+
+**T32 — Health report + trap + rotation cron**
+
+`/root/health_report.sh`:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+outdir=/var/log/health
+tmp=/tmp/health.$$.tmp
+final="$outdir/$(hostname)-$(date +%F).log"
+
+trap 'rm -f "$tmp"' EXIT          # always clean up the temp file
+trap 'exit 1' INT TERM HUP        # on interrupt, exit → fires the EXIT trap
+
+mkdir -p "$outdir"
+
+{
+    echo "=== Health report: $(date) ==="
+    echo "Hostname: $(hostname)"
+    echo "Kernel:   $(uname -r)"
+    echo "Uptime:   $(uptime -p)"
+    echo "Load:     $(cut -d' ' -f1-3 /proc/loadavg)"
+    echo
+    echo "--- Top 5 CPU processes ---"
+    ps -eo pid,user,pcpu,pmem,comm --sort=-pcpu | head -6
+    echo
+    echo "--- Disk usage ---"
+    df -hT -x tmpfs -x devtmpfs
+    echo
+    echo "--- Failed systemd units ---"
+    systemctl --failed --no-legend --no-pager || true
+} > "$tmp"
+
+mv -f "$tmp" "$final"             # atomic within one filesystem; else copy + rename
+chmod 640 "$final"
+
+# Rotation: keep only the 14 newest reports
+ls -1t "$outdir"/*.log 2>/dev/null | tail -n +15 | xargs -r rm -f
+```
+
+```bash
+sudo chmod 700 /root/health_report.sh
+sudo /root/health_report.sh && ls -l /var/log/health/
+sudo crontab -e     # root's crontab:
+#   0 6 2-31 * *  /root/health_report.sh
+sudo crontab -l
+```
+
+- **Cron has no "except" operator,** so `2-31` in day-of-month = every day except the 1st.
+- **Watch out for day-of-month plus day-of-week together.** If **both** fields are restricted (not `*`), cron runs when **either** matches. Leave day-of-week as `*` here.
+- **Why `mv` to `/var/log` isn't truly atomic:** `/tmp` and `/var/log` may be different filesystems, and then `mv` copies and deletes. The task specifies `/tmp`. For a truly atomic rename, create the temp file in the destination directory (`mktemp -p "$outdir"`).
+- **One `trap` on EXIT covers normal exit,** `set -e` failures, and (through the INT/TERM handler) Ctrl-C.
+- **Another way to rotate:** `find "$outdir" -name '*.log' -mtime +13 -delete`. This rotates by age, so it isn't the same as "keep 14 files" if a day is skipped.
 
 ---
 
 ### Section 10 — SELinux
 
-**T33 — Custom web root**
+**T33 — Custom web root** *(charlie)*
 
 ```bash
-journalctl -u httpd
-ausearch -m avc -ts recent
-semanage fcontext -a -t httpd_sys_content_t '/srv/websites(/.*)?'
-restorecon -Rv /srv/websites
-curl http://localhost/
-ps -eZ | grep httpd
+getenforce
+grep ^SELINUX= /etc/selinux/config     # must be SELINUX=enforcing
+# if not: set it in /etc/selinux/config (persistent) AND run: sudo setenforce 1 (now)
+
+sudo dnf install -y httpd
+sudo systemctl enable --now httpd
+sudo firewall-cmd --permanent --zone=labzone --add-service=http && sudo firewall-cmd --reload  # for remote tests
+
+sudo mkdir -p /srv/websites/site1
+echo "Site1 charlie" | sudo tee /srv/websites/site1/index.html
 ```
 
-**T34 — Non-standard SSH port**
+`/etc/httpd/conf.d/site1.conf`:
+
+```apache
+DocumentRoot "/srv/websites/site1"
+<Directory "/srv/websites/site1">
+    AllowOverride None
+    Require all granted
+</Directory>
+```
 
 ```bash
-semanage port -a -t ssh_port_t -p tcp 2222
-firewall-cmd --permanent --zone=labzone --add-port=2222/tcp
-firewall-cmd --reload
-ss -tlnp | grep -E ':22|:2222'
-getsebool ssh_sysadm_login
-setsebool -P httpd_can_network_connect_db on
-restorecon -v /var/www/html/motd.txt
+sudo apachectl configtest              # Syntax OK
+sudo systemctl restart httpd
+curl http://localhost/                 # 403 Forbidden
+ls -Zd /srv/websites/site1             # var_t (or default_t) → wrong label
+
+# Diagnose
+sudo journalctl -u httpd -n 20
+sudo tail /var/log/httpd/error_log     # "Permission denied: ... access to /index.html denied"
+sudo ausearch -m AVC -ts recent        # denied { getattr/read } ... scontext=httpd_t tcontext=var_t
+sudo sealert -a /var/log/audit/audit.log    # (setroubleshoot-server) plain-English fix suggestion
+
+# Fix (persistent rule + apply it)
+sudo semanage fcontext -a -t httpd_sys_content_t '/srv/websites(/.*)?'
+sudo restorecon -Rv /srv/websites
+curl http://localhost/                 # Site1 charlie
+ps -eZ | grep httpd                    # system_u:system_r:httpd_t:s0
 ```
+
+**Verify:**
+
+```bash
+sudo semanage fcontext -l -C           # your local customisation listed
+ls -Zd /srv/websites /srv/websites/site1/index.html   # httpd_sys_content_t
+```
+
+- **`chcon` doesn't survive a relabel.** A relabel or `restorecon` reverts it. `semanage fcontext` + `restorecon` is the persistent answer.
+- **The regex `'(/.*)?'` matches the directory itself and everything below it.** Quote it so the shell doesn't expand it.
+- **A `Require all granted` block is needed for any directory outside `/var/www`.** The stock `httpd.conf` denies access to `/` by default, so a missing block is a second, non-SELinux cause of 403. Check the `error_log` to tell them apart: an AVC means SELinux, "client denied by server configuration" means Apache config.
+- **httpd starts fine and returns 403.** It doesn't fail to start. SELinux only blocks the file reads.
+
+---
+
+**T34 — Non-standard SSH port + booleans** *(charlie)*
+
+`/etc/ssh/sshd_config.d/20-ports.conf`:
+
+```text
+Port 22
+Port 2222
+```
+
+```bash
+sudo dnf install -y policycoreutils-python-utils # provides semanage (if not present)
+sudo semanage port -a -t ssh_port_t -p tcp 2222
+sudo semanage port -l | grep ssh_port_t           # ssh_port_t  tcp  2222, 22
+
+sudo firewall-cmd --permanent --zone=labzone --add-port=2222/tcp
+sudo firewall-cmd --reload
+
+sudo sshd -t && sudo systemctl restart sshd
+sudo ss -tlnp | grep sshd                         # 0.0.0.0:22 and 0.0.0.0:2222
+
+getsebool -a | grep -E 'ssh_sysadm_login|use_nfs_home_dirs'
+sudo setsebool -P ssh_sysadm_login on             # fall back to use_nfs_home_dirs if absent
+sudo setsebool -P httpd_can_network_connect_db on
+getsebool ssh_sysadm_login httpd_can_network_connect_db
+sudo semanage boolean -l -C                       # shows locally-changed (persistent) booleans
+```
+
+Step 7, file context:
+
+```bash
+sudo cp /etc/motd /var/www/html/motd.txt
+ls -Z /var/www/html/motd.txt          # httpd_sys_content_t already — see note
+# To actually reproduce the wrong label, preserve the source context:
+sudo cp --preserve=context /etc/motd /var/www/html/motd.txt     # or: cp -a, or mv
+ls -Z /var/www/html/motd.txt          # etc_t
+sudo restorecon -v /var/www/html/motd.txt  # → httpd_sys_content_t
+```
+
+**Verify:**
+
+```bash
+ssh -p 2222 localhost true && echo "2222 OK"
+sudo firewall-cmd --zone=labzone --list-ports # 9000-9010/tcp 2222/tcp
+ls -Z /var/www/html/motd.txt
+```
+
+- **List `Port 22` too.** Once any `Port` line exists, sshd stops listening on the default 22. Both lines are needed.
+- **Missing the SELinux port label breaks sshd's bind.** sshd fails to bind 2222 (`error: Bind to port 2222 ... failed: Permission denied`) and AVCs show up in `ausearch -m AVC`.
+- **`setsebool` without `-P` only lasts until reboot.**
+- **Why the task's "observe `etc_t`" doesn't happen with plain `cp`:** `cp` **creates a new file**, which takes the label of its parent directory (`httpd_sys_content_t` in `/var/www/html`). `mv`, `cp -a` and `cp --preserve=context` keep the **source** label (`etc_t`, or `admin_home_t` if the file was created in `/root`). That's the classic way web content ends up mislabeled. The fix in every case is `restorecon`.
 
 ---
 
@@ -1031,27 +2346,38 @@ restorecon -v /var/www/html/motd.txt
 
 ```bash
 # 1. Anchored: field 3 (UID) must be exactly 2100-2103
-grep -E '^[^:]+:[^:]*:210[0-3]:' /etc/passwd > /root/exam_users.txt
-# 2. >> appends; > would truncate
-date >> /root/exam_users.txt
+grep -E '^[^:]+:[^:]*:210[0-3]:' /etc/passwd | sudo tee /root/exam_users.txt > /dev/null
+# 2. tee -a appends (like >>); plain tee truncates (like >)
+date | sudo tee -a /root/exam_users.txt > /dev/null
 # 3. -v inverts: drop comment lines (optionally indented) and empty lines
-grep -Ev '^[[:space:]]*(#|$)' /etc/ssh/sshd_config > /root/sshd_active.txt
+sudo grep -Ev '^[[:space:]]*(#|$)' /etc/ssh/sshd_config | sudo tee /root/sshd_active.txt > /dev/null
 # 4. su - = login shell: emma's HOME, PATH and cwd (/srv/users/emma)
 su - emma
 find /etc -name '*.conf' > ~/conf_list.txt 2> ~/conf_errors.txt
 ls -l ~/conf_*.txt
 exit
 # 5-6. -J = xz; name the member to extract just that file
-tar -cJf /root/sshconf.tar.xz /etc/ssh
-tar -tJf /root/sshconf.tar.xz | grep sshd_config
-mkdir -p /root/restore
-tar -xJf /root/sshconf.tar.xz -C /root/restore etc/ssh/sshd_config
+sudo tar -cJf /root/sshconf.tar.xz /etc/ssh
+sudo tar -tJf /root/sshconf.tar.xz | grep sshd_config
+sudo mkdir -p /root/restore
+sudo tar -xJf /root/sshconf.tar.xz -C /root/restore etc/ssh/sshd_config
 ```
 
-`grep -E '210[0-3]'` without anchors also matches a GID or a home path containing `2100`. Anchor
-on the field separators. Plain `su emma` keeps root's environment and working directory, so `~`
-may not expand to emma's home. The member name has **no leading slash** (`etc/ssh/sshd_config`)
-because `tar` stripped it at creation.
+**Verify:**
+
+```bash
+sudo cat /root/exam_users.txt                  # 4 user lines + a date line
+sudo grep -c '' /root/sshd_active.txt; sudo grep -E '^\s*#' /root/sshd_active.txt    # no output from 2nd cmd
+sudo ls -l /srv/users/emma/conf_list.txt /srv/users/emma/conf_errors.txt  # owned by emma
+sudo ls -l /root/restore/etc/ssh/sshd_config
+```
+
+- **In a root shell, steps 1–3 are plain `>` and `>>`.** That's the redirection skill this task grades: `grep ... > /root/exam_users.txt`, `date >> /root/exam_users.txt`. The `| sudo tee` form above is only needed because `/root` isn't writable by your own user.
+- **Anchor on the field separators.** `grep -E '210[0-3]'` without anchors also matches a GID or a home path containing `2100`.
+- **Use `su -`, not plain `su`.** Plain `su emma` keeps root's environment and working directory, so `~` may not expand to emma's home.
+- **The member name has no leading slash** (`etc/ssh/sshd_config`) because `tar` stripped it at creation.
+- **Extract the file into `/root/restore/etc/ssh/sshd_config`.** To drop it directly into `/root/restore/`, add `--strip-components=2`.
+- **The task says "nothing may print", so it needs two separate redirections.** `&>` sends both streams to one file. Here stdout and stderr go to **different** files.
 
 ---
 
@@ -1061,6 +2387,7 @@ because `tar` stripped it at creation.
 
     # init=/bin/bash method
     # Boot GRUB -> 'e' -> replace ro with rw -> append init=/bin/bash -> Ctrl-x
+    # (already root in this shell, no sudo)
     mount -o remount,rw /
     passwd
     touch /.autorelabel
@@ -1068,29 +2395,33 @@ because `tar` stripped it at creation.
 
 ### Parted (scripted)
 
-    parted -s /dev/vdX mklabel gpt
-    parted -s /dev/vdX mkpart primary xfs 1MiB 2049MiB
-    parted -s /dev/vdX set 3 lvm on
-    parted /dev/vdX align-check optimal 1
+    sudo parted -s /dev/vdX mklabel gpt
+    sudo parted -s /dev/vdX mkpart primary xfs 1MiB 2049MiB
+    sudo parted -s /dev/vdX set 3 lvm on
+    sudo parted /dev/vdX align-check optimal 1
 
 ### LVM advanced
 
-    lvcreate --type striped -i 2 -L 1G -n lv_stripe vg_lab2
-    pvmove --alloc anywhere /dev/vdd
-    vgreduce vg_lab2 /dev/vdd
-    lvextend -l +100%FREE -r /dev/vg_lab2/lv_home2
+    sudo vgcreate -s 32M vg_lab2 /dev/vdb3 /dev/vdd
+    sudo lvcreate --type striped -i 2 -L 1G -n lv_stripe vg_lab2
+    sudo lvcreate -l 80 -n lv_home2 vg_lab2
+    sudo pvmove --alloc anywhere /dev/vdd
+    sudo vgreduce vg_lab2 /dev/vdd
+    sudo pvremove /dev/vdd && sudo wipefs -a /dev/vdd
+    sudo lvextend -l +100%FREE -r /dev/vg_lab2/lv_home2
 
 ### Firewalld zones + rich rules
 
-    firewall-cmd --permanent --new-zone=labzone
-    firewall-cmd --permanent --zone=labzone --add-rich-rule='rule family=ipv4 source address=10.20.30.100 drop'
-    firewall-cmd --set-default-zone=labzone
-    firewall-cmd --permanent --zone=labzone --change-interface=eth0
+    sudo firewall-cmd --permanent --new-zone=labzone
+    sudo firewall-cmd --permanent --zone=labzone --add-rich-rule='rule family="ipv4" source address="10.20.30.100" drop'
+    sudo firewall-cmd --set-default-zone=labzone
+    sudo nmcli con mod lab-static connection.zone labzone     # preferred over --change-interface
+    # --timeout=60s works on runtime rules only; it can't be combined with --permanent
 
 ### ACLs
 
-    setfacl -m u:frank:rwx /srv/project/phoenix
-    setfacl -d -m g:auditors:rx /srv/project/phoenix
+    sudo setfacl -m u:frank:rwx,g:auditors:rx,u:henry:--- /srv/project/phoenix      # access
+    sudo setfacl -d -m u:frank:rwx,g:auditors:rx,u:henry:--- /srv/project/phoenix   # default
     getfacl /srv/project/phoenix
 
 ### SSH Match block
@@ -1104,8 +2435,9 @@ because `tar` stripped it at creation.
     grep -E '^[^:]+:[^:]*:210[0-3]:' /etc/passwd
     grep -Ev '^[[:space:]]*(#|$)' FILE        # active config lines only
     CMD > out 2> err  /  CMD >> out  /  CMD &> both
+    CMD | sudo tee /root/out > /dev/null      # write a root-owned file (tee -a = append)
     su - USER                                 # login shell
-    tar -cJf A.tar.xz DIR ; tar -xJf A.tar.xz -C DEST path/in/archive
+    sudo tar -cJf A.tar.xz DIR ; sudo tar -xJf A.tar.xz -C DEST path/in/archive
 
 ---
 
@@ -1139,3 +2471,4 @@ because `tar` stripped it at creation.
 *Practice exam #2 created 2026-07-08 based on RHEL 10 EX200 objectives.*
 *Companion to Exam #1 (2026-05-12); designed to cover the same objectives with fresh scenarios and value swaps.*
 *Restructured 2026-09-09: inline solutions, the command quick-reference, and the Delta table moved below the answer key divider so the exam can be re-run cold.*
+*Answer key expanded 2026-10-19: full solutions + verify steps for all 35 tasks; corrected T15 (reinstall doesn't restore a modified `%config(noreplace)` file), T20 (segment type stays `striped`), T27 (chronyd exits on SIGHUP, so the step now uses sshd), T34 (plain `cp` already gets the right label); added gotchas for RHEL 10 BLS kernel args, `/net -hosts` in auto.master, `root_squash` vs. T22's root write, and `showmount` on a v4-only server.*
