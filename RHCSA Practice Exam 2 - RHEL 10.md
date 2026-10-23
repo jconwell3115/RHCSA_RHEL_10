@@ -1153,6 +1153,7 @@ sudo chmod 644 /etc/profile.d/ops-umask.sh
 ```
 
 **Verify:**
+
 ```bash
 su - emma -c umask       # 0027
 su - frank -c umask      # 0022 (frank isn't in ops)
@@ -1603,7 +1604,7 @@ lsblk /dev/vdd; sudo wipefs /dev/vdd         # no signatures
 
 ### Section 7 — File Systems & NFS
 
-**T21 — NFSv4-only server** *(delta)*
+**T21 — NFSv4-only server** *(delta)()*
 
 ```bash
 sudo dnf install -y nfs-utils    # needs delta's repos (T13 delta note)
@@ -1632,11 +1633,11 @@ sudo exportfs -rav
 ```bash
 sudo exportfs -v
 sudo cat /proc/fs/nfsd/versions   # -3 +4 +4.1 +4.2
-showmount -e localhost            # may FAIL on a true v4-only server — see note
-sudo mount -t nfs4 localhost:/srv/nfs/projects /mnt && sudo umount /mnt   # real proof the export works
+showmount -e localhost            # may work or fail on a v4-only server — see note
+sudo mount -t nfs4 delta.ex200.lab:/srv/nfs/projects /mnt && sudo umount /mnt   # real proof — NOT localhost (127.0.0.1 is outside 10.20.30.0/24)
 ```
 
-- **`showmount` may fail here.** It uses the NFSv3 **MOUNT** protocol through rpcbind. With `vers3=n`, `rpc.mountd` stops advertising MOUNT v3, so `showmount -e` can fail with *"Program not registered"*. That's evidence v3 is really off. Use `sudo exportfs -v` and an actual `nfs4` test mount instead.
+- **`showmount` may fail here.** It uses the NFSv3 **MOUNT** protocol through rpcbind. With `vers3=n`, `rpc.mountd` stops advertising MOUNT v3, so `showmount -e` can fail with *"Program not registered"*. If it still lists the exports (rpcbind/mountd still answering), that's fine too; `/proc/fs/nfsd/versions` showing `-3` is the real proof v3 is off. Use `sudo exportfs -v` and an actual `nfs4` test mount instead.
 - **`root_squash` is the default on every export.** charlie's root becomes `nobody` on the server. The task expects root on charlie to **create** a file in projects (Task 22 step 4), so the export directory must be writable by `nobody` (`sudo chmod 777`, or `sudo chown nobody:nobody`), or the export needs `no_root_squash`. Pick one; `chmod 777` is the least invasive.
 - `charlie.ex200.lab` in the exports file must resolve on delta, which the `/etc/hosts` entries from Task 4 take care of.
 - `exportfs -r` re-reads `/etc/exports` without restarting the server.
