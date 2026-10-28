@@ -1749,6 +1749,7 @@ sudo chmod 2770 /opt/finance/reports     # 'g+s' is the required part; 2770 is a
 sudo chown gina /opt/finance/bin/run_report.sh
 sudo chmod 4754 /opt/finance/bin/run_report.sh
 
+sudo groupadd gina                       # gina was created with -g ops, so no "gina" group exists yet
 sudo chown gina:gina /opt/finance/private
 sudo chmod 0700 /opt/finance/private
 
@@ -1760,13 +1761,14 @@ find /usr/bin -type f -perm -4000 | sudo tee /root/suid_list.txt > /dev/null
 ```bash
 sudo stat -c '%A %a %U:%G %n' /opt/finance /opt/finance/reports /opt/finance/bin/run_report.sh /opt/finance/private
 #  drwxr-s--- 2750 gina:ops   /opt/finance
-#  drwxrws--- 2770 gina:ops   /opt/finance/reports
-#  -rwsr-xr-- 4754 gina:...   /opt/finance/bin/run_report.sh
+#  drwxrws--- 2770 root:ops   /opt/finance/reports      (chgrp only; owner unspecified)
+#  -rwsr-xr-- 4754 gina:root  /opt/finance/bin/run_report.sh   (chown owner only; group unspecified)
 #  drwx------ 700  gina:gina  /opt/finance/private
 sudo cat /root/suid_list.txt             # passwd, sudo, su, mount, chage, ...
 ```
 
 - **`-perm -4000` vs `-perm /4000`:** `-4000` means "at least these bits". `/4000` means "any of these bits", which is the same thing for a single bit.
+- **`chown: invalid group: 'gina:gina'`:** `useradd -g ops` sets the primary group and skips creating a private `gina` group. Run `sudo groupadd gina` and leave gina's primary group as `ops`, which other tasks depend on.
 - **Order matters: `chown` clears SUID/SGID** on files. Do `chown` first and `chmod 4754` second.
 - **Setuid does nothing on scripts.** The Linux kernel ignores the setuid bit on shebang scripts, so `4754` on `run_report.sh` sets the bit correctly but won't actually elevate privilege at exec time.
 - **SGID on a directory** makes new files inherit the directory's group. The capital `S` in `ls` output means SGID is set but group-execute isn't.
