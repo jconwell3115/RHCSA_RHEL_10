@@ -2263,7 +2263,9 @@ DocumentRoot "/srv/websites/site1"
 ```bash
 sudo apachectl configtest              # Syntax OK
 sudo systemctl restart httpd
-curl http://localhost/                 # 403 Forbidden
+curl -I http://localhost/                    # HTTP/1.1 403 Forbidden
+curl http://localhost/index.html             # plain 403: the LocationMatch only covers "/"
+            # 403 Forbidden
 ls -Zd /srv/websites/site1             # var_t (or default_t) → wrong label
 
 # Diagnose
@@ -2384,6 +2386,39 @@ sudo ls -l /root/restore/etc/ssh/sshd_config
 - **The member name has no leading slash** (`etc/ssh/sshd_config`) because `tar` stripped it at creation.
 - **Extract the file into `/root/restore/etc/ssh/sshd_config`.** To drop it directly into `/root/restore/`, add `--strip-components=2`.
 - **The task says "nothing may print", so it needs two separate redirections.** `&>` sends both streams to one file. Here stdout and stderr go to **different** files.
+
+**tar options reference**
+
+Pattern: `tar -<mode><compression><other>f ARCHIVE [paths]`. Pick one mode, add a compression letter if you need one, and put `f` **last** in the bundle, because the next word is the archive name.
+
+| Option | Long form | Meaning |
+|---|---|---|
+| `-c` | `--create` | create an archive (mode) |
+| `-x` | `--extract` | extract (mode) |
+| `-t` | `--list` | list contents (mode) |
+| `-r` | `--append` | add files to an existing **uncompressed** archive (mode) |
+| `-f FILE` | `--file` | archive filename; always lowercase, always followed by the name |
+| `-z` | `--gzip` | gzip → `.tar.gz` / `.tgz` |
+| `-j` | `--bzip2` | bzip2 → `.tar.bz2` |
+| `-J` | `--xz` | xz → `.tar.xz` (capital J) |
+| `-a` | `--auto-compress` | pick compression from the archive suffix (with `-c`) |
+| `-v` | `--verbose` | print each file as it's processed |
+| `-C DIR` | `--directory` | change to DIR first; the directory must already exist |
+| `-p` | `--preserve-permissions` | keep permissions on extract (default when root) |
+| | `--strip-components=N` | drop the first N path parts on extract |
+| | `--selinux` / `--acls` / `--xattrs` | store/restore SELinux contexts, ACLs, xattrs |
+| | `--exclude=PATTERN` | skip matching files when creating |
+
+```bash
+tar -cvJf /root/a.tar.xz /etc/ssh           # create, xz
+tar -tvJf /root/a.tar.xz                    # list (on extract/list, modern tar auto-detects compression, so -J is optional)
+tar -xJf  /root/a.tar.xz -C /root/restore   # extract everything into /root/restore
+tar -xJf  /root/a.tar.xz -C /root/restore etc/ssh/sshd_config   # one member, no leading /
+```
+
+- **Case matters.** `-F` (capital) is `--info-script` and turns on multi-volume mode, which gives "Cannot use multi-volume compressed archives". `-J` is xz but `-j` is bzip2.
+- **`tar` strips the leading `/` when creating**, so members are `etc/ssh/...`. Use exactly what `tar -tf` shows when extracting a single file.
+- **Looking it up in the exam:** `tar --help | less` is quicker than `man tar` and lists every short option. `man tar` has an EXAMPLES section.
 
 ---
 
