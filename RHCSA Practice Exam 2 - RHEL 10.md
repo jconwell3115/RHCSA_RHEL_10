@@ -1922,6 +1922,7 @@ EOF
 sudo chmod 755 /etc/systemd/journald.conf.d
 sudo chmod 644 /etc/systemd/journald.conf.d/lab.conf
 sudo systemctl restart systemd-journald
+sudo journalctl --flush               # switch from /run/log/journal to disk now; creates /var/log/journal
 ```
 
 `/etc/rsyslog.d/secure-lab.conf`:
@@ -1973,7 +1974,7 @@ systemd-analyze cat-config systemd/journald.conf | grep -E 'Storage|SystemMaxUse
 
 - **`ForwardToSyslog` isn't how RHEL's rsyslog gets journal entries.** RHEL's rsyslog reads the journal **directly** with the `imjournal` module, so `/var/log/secure` etc. fill up even with `ForwardToSyslog=no`. The task asks for forwarding, so set it, but it's not why `secure.lab` gets entries.
 - **`postrotate` HUPs rsyslog** so it reopens the new file. Without it, rsyslog keeps writing to the rotated file. The stock `/etc/logrotate.d/rsyslog` does the same thing.
-- `Storage=persistent` creates `/var/log/journal` automatically. The manual method is `sudo mkdir /var/log/journal && sudo systemd-tmpfiles --create --prefix /var/log/journal`.
+- **`/var/log/journal` doesn't appear on restart alone.** `Storage=persistent` creates it, but only when journald moves from `/run` to `/var`. That happens at boot via `systemd-journal-flush.service`, or right away with `sudo journalctl --flush`. Restarting journald by itself often keeps it writing to `/run/log/journal`. The manual method is `sudo mkdir /var/log/journal && sudo systemd-tmpfiles --create --prefix /var/log/journal`.
 - Other ways to match the sudo entries: `sudo journalctl -t sudo`, `sudo journalctl SYSLOG_FACILITY=10` (authpriv).
 
 ---
@@ -2046,6 +2047,8 @@ cat /var/log/labhealth.log
 systemctl status labhealth.service             # inactive (dead), status=0/SUCCESS
 ```
 
+- **`OnCalendar` format is `[DayOfWeek] Year-Month-Day Hour:Minute:Second`.** `*-*-*` = any year, any month, any day (every day); `*` is a wildcard as in cron. Other examples: `Mon *-*-* 09:00:00` (Mondays 09:00), `*-*-01 00:00:00` (1st of each month), `*-*-* *:00/15:00` (every 15 min).
+- **Looking it up in the exam:** `man systemd.time`, then search `/CALENDAR EVENTS` for the syntax and examples. Test any expression with `systemd-analyze calendar '<expr>' --iterations=4`, which prints the normalized form and the next 4 run times.
 - **`00/3` means start at 00 and repeat every 3 hours:** 00, 03, 06, … 21. `OnUnitActiveSec=3h` is a relative alternative, but `OnCalendar` + `Persistent=true` is what the task wants.
 - **`Persistent=true`** runs a missed job at the next boot if the system was off when it was due. It only works with `OnCalendar`.
 - **Cron fields:** `minute hour day-of-month month day-of-week`. `1-5` = Mon–Fri.
