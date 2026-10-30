@@ -262,7 +262,7 @@ sudo shutdown -h now
 
 ```bash
 sudo virt-sysprep -d rhel10-golden \
-  --operations defaults,-ssh-userdir,-ssh-hostkeys \
+  --operations defaults,-ssh-userdir,-ssh-hostkeys,-net-nmconn \
   --hostname localhost.localdomain
 
 sudo virsh snapshot-create-as rhel10-golden clean-baseline \
@@ -271,7 +271,9 @@ sudo virsh snapshot-create-as rhel10-golden clean-baseline \
 sudo virsh snapshot-list rhel10-golden
 ```
 
- \You now have a reusable base. Every exam VM is a clone of this.
+> **Keep `-net-nmconn`.** That sysprep operation is on by default and deletes every NetworkManager profile in `/etc/NetworkManager/system-connections/`. RHEL doesn't auto-create a profile for an unconfigured NIC, so the clones would then boot with no network: no DHCP lease, no SSH, and nothing for the exam network tasks to `nmcli con mod`. Keeping the profile gives every clone the same starting point as a fresh install: one DHCP profile named `enp1s0`.
+
+You now have a reusable base. Every exam VM is a clone of this.
 
 ### 0.7 — Updating the Golden Image Later (Periodic Maintenance)
 
@@ -303,7 +305,7 @@ sudo shutdown -h now
 
 ```bash
 sudo virt-sysprep -d rhel10-golden \
-  --operations defaults,-ssh-userdir,-ssh-hostkeys \
+  --operations defaults,-ssh-userdir,-ssh-hostkeys,-net-nmconn \
   --hostname localhost.localdomain
 
 sudo virsh snapshot-delete rhel10-golden clean-baseline
@@ -377,7 +379,7 @@ sudo virsh net-list --all
 
 ## 🔧 PHASE 2 — Helper Script: Attach Extra Disks
 
-All three exams need multiple raw disks attached unpartitioned. The helper ships with this repo in the `RHCSA-Lab-Scripts/` folder next to this note (`add-disk.sh`, along with `rebuild-rhcsa-labs.sh`, `rhel10-dvd-download.sh` and the `exN-verify.sh` graders). Point `RHCSA_SCRIPTS` at that folder once per shell — every phase below calls the script through it, so it works wherever you cloned the repo:
+All three exams need multiple raw disks attached unpartitioned. The helper ships with this repo in the `RHCSA-Lab-Scripts/` folder next to this note (`add-disk.sh`, along with `rebuild-rhcsa-labs.sh`, `vm-serial-console.sh`, `ex3-seed-echo.sh`, `rhel10-dvd-download.sh` and the `exN-verify.sh` graders). Point `RHCSA_SCRIPTS` at that folder once per shell — every phase below calls the script through it, so it works wherever you cloned the repo:
 
 ```bash
 # adjust to wherever you cloned the repo
@@ -508,9 +510,14 @@ for vm in rhel10-alpha rhel10-bravo; do
   sudo virsh setvcpus  "${vm}" 2 --config
 done
 
-sudo virt-customize -d rhel10-alpha --hostname rhel10-alpha
-sudo virt-customize -d rhel10-bravo --hostname rhel10-bravo
+for vm in rhel10-alpha rhel10-bravo; do
+  sudo virt-customize -d "${vm}" --hostname "${vm}" \
+    --run "$RHCSA_SCRIPTS/vm-serial-console.sh" \
+    --ssh-inject "student:file:$HOME/.ssh/id_ed25519.pub"
+done
 ```
+
+> **Console + SSH access.** `vm-serial-console.sh` adds `console=tty0 console=ttyS0,115200` to the kernel command line, puts the GRUB menu on serial, and enables `serial-getty@ttyS0`. After that, `sudo virsh console <vm>` shows the GRUB menu (needed for the break-in tasks), boot messages, emergency/rescue shells and a login prompt. `--ssh-inject` adds your host key to `student`'s `authorized_keys`, so `ssh student@<ip>` works without a password. Both happen before the exam-ready snapshot, so they survive every `snapshot-revert`. Exam 4.3 and 5.3 use the same loop.
 
 ### 3.4 — Attach extra disks
 
@@ -593,8 +600,11 @@ for vm in rhel10-charlie rhel10-delta; do
   sudo virsh setvcpus  "${vm}" 2 --config
 done
 
-sudo virt-customize -d rhel10-charlie --hostname rhel10-charlie
-sudo virt-customize -d rhel10-delta   --hostname rhel10-delta
+for vm in rhel10-charlie rhel10-delta; do
+  sudo virt-customize -d "${vm}" --hostname "${vm}" \
+    --run "$RHCSA_SCRIPTS/vm-serial-console.sh" \
+    --ssh-inject "student:file:$HOME/.ssh/id_ed25519.pub"
+done
 ```
 
 ### 4.4 — Attach extra disks
@@ -685,8 +695,11 @@ for vm in rhel10-echo rhel10-foxtrot; do
   sudo virsh setvcpus  "${vm}" 2 --config
 done
 
-sudo virt-customize -d rhel10-echo    --hostname rhel10-echo
-sudo virt-customize -d rhel10-foxtrot --hostname rhel10-foxtrot
+for vm in rhel10-echo rhel10-foxtrot; do
+  sudo virt-customize -d "${vm}" --hostname "${vm}" \
+    --run "$RHCSA_SCRIPTS/vm-serial-console.sh" \
+    --ssh-inject "student:file:$HOME/.ssh/id_ed25519.pub"
+done
 ```
 
 ### 5.4 — Attach extra disks
@@ -699,76 +712,7 @@ sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-foxtrot vdb 8
 
 > Unlike Exams 1–2, Exam 3 tasks reference `/dev/vdX` (Task 20's `fdisk` work, Task 21's LVM shrink, Task 22's swap replacement, Task 23–24's mounts) — `add-disk.sh` already attaches with `--targetbus virtio`, so this is automatic.
 
-### 5.5 — Seed the broken conditions (do this BEFORE the exam-ready snapshot)
-
-Boot each VM once, run its seed block, then shut down.
-
-**On `rhel10-foxtrot` — break the boot (Task 1):**
-
-```bash
-sudo virsh start rhel10-foxtrot
-sudo virsh console rhel10-foxtrot
-```
-
-Inside foxtrot:
-
-```bash
-# Bogus UUID with no nofail → boot drops to emergency
-echo "UUID=deadbeef-0000-0000-0000-000000000000 /mnt/archive xfs defaults 0 0" \
-  | sudo tee -a /etc/fstab
-
-# Scramble root so emergency.target's sulogin prompt is useless
-echo "root:$(openssl rand -base64 24)" | sudo chpasswd
-sudo shutdown -h now
-```
-
-**On `rhel10-echo` — break a service (Task 4) and seed SELinux violations (Task 33):**
-
-```bash
-sudo virsh start rhel10-echo
-sudo virsh console rhel10-echo
-```
-
-Inside echo:
-
-```bash
-# --- Task 4: a unit that will fail on boot ---
-sudo tee /etc/systemd/system/labdata.service >/dev/null <<'EOF'
-[Unit]
-Description=Lab Data Collector
-After=network.target
-
-[Service]
-Type=simple
-ExecStart=/usr/local/sbin/labdata-collect --daemon
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-EOF
-sudo systemctl daemon-reload
-sudo systemctl enable labdata.service
-
-# --- Task 33: httpd pre-configured into TWO SELinux violations ---
-sudo dnf install -y httpd policycoreutils-python-utils setroubleshoot-server
-sudo mkdir -p /srv/intranet
-echo "Echo Intranet OK" | sudo tee /srv/intranet/index.html >/dev/null
-sudo tee /etc/httpd/conf.d/intranet.conf >/dev/null <<'EOF'
-Listen 8404
-<VirtualHost *:8404>
-    DocumentRoot /srv/intranet
-    <Directory /srv/intranet>
-        Require all granted
-    </Directory>
-</VirtualHost>
-EOF
-# Deliberately do NOT label /srv/intranet and do NOT label port 8404.
-sudo systemctl enable httpd
-sudo firewall-cmd --permanent --add-port=8404/tcp && sudo firewall-cmd --reload
-sudo shutdown -h now
-```
-
-### 5.5b — Attach the DVD ISO to echo and foxtrot (local repo source)
+### 5.5 — Attach the DVD ISO to echo and foxtrot (local repo source)
 
 ```bash
 for vm in rhel10-echo rhel10-foxtrot; do
@@ -777,7 +721,31 @@ for vm in rhel10-echo rhel10-foxtrot; do
 done
 ```
 
-> Appears as `/dev/sr0` inside each VM. Task 17 builds the repo on echo. Foxtrot needs the same repo for Task 25 (`nfs-utils`). Attach **before** the 5.6 snapshot so `exam3-ready` retains the media across reverts.
+> Appears as `/dev/sr0` inside each VM. Task 17 builds the repo on echo. Foxtrot needs the same repo for Task 25 (`nfs-utils`). Attach it **before** seeding, because 5.5b installs echo's packages from it, and before the 5.6 snapshot so `exam3-ready` keeps the media across reverts.
+
+### 5.5b — Seed the broken conditions (do this BEFORE the exam-ready snapshot)
+
+**On `rhel10-foxtrot`, break the boot (Task 1).** This is done offline, so foxtrot doesn't need to boot:
+
+```bash
+# Bogus UUID with no nofail → boot drops to emergency
+# Scrambled root → emergency.target's sulogin prompt is useless
+sudo virt-customize -d rhel10-foxtrot \
+  --append-line '/etc/fstab:UUID=deadbeef-0000-0000-0000-000000000000 /mnt/archive xfs defaults 0 0' \
+  --root-password "password:$(openssl rand -base64 24)"
+```
+
+**On `rhel10-echo`, break a service (Task 4) and seed SELinux violations (Task 33).** This needs `dnf`, so boot echo and run `ex3-seed-echo.sh` over SSH. The script installs httpd from the DVD through a temporary repo, so it needs no subscription and leaves no `.repo` file behind for Task 17:
+
+```bash
+sudo virsh start rhel10-echo
+sudo virsh domifaddr rhel10-echo                 # wait for the DHCP lease (172.16.40.1xx)
+ECHO_IP=172.16.40.1xx                            # ← the address shown
+ssh student@"$ECHO_IP" 'sudo bash -s' < "$RHCSA_SCRIPTS/ex3-seed-echo.sh"
+ssh student@"$ECHO_IP" 'sudo systemctl poweroff'
+```
+
+> `ex3-seed-echo.sh` writes the failing `labdata.service` and enables it. It also installs `httpd`, `policycoreutils-python-utils` and `setroubleshoot-server`, then configures `/srv/intranet` on port 8404 without labelling the directory or the port. Finally it enables httpd and opens 8404/tcp in the firewall. Read the script to see exactly what gets seeded.
 
 ### 5.6 — Start and snapshot
 
@@ -802,11 +770,18 @@ sudo virsh list --all
 sudo virsh snapshot-list rhel10-alpha
 ```
 
-Access consoles (use serial console until the network task is done):
+Access the VMs. Every exam VM has a serial console and key-based SSH for `student` (set in Phase 3.3 / 4.3 / 5.3, or by `rebuild-rhcsa-labs.sh`):
 
 ```bash
-sudo virsh console rhel10-alpha
+# SSH: use the DHCP lease until the exam's network task, then the static IP
+sudo virsh domifaddr rhel10-alpha                # 192.168.100.1xx before Task 4
+ssh student@192.168.100.1xx
+
+# Serial console: GRUB menu, boot messages, emergency/rescue shells, login prompt
+sudo virsh console rhel10-alpha                  # press Enter if the screen is blank; Ctrl+] to leave
 ```
+
+Use the console for anything that happens before sshd is up or when the network is broken: the GRUB break-in tasks (bravo, charlie), delta's `rescue.target`, foxtrot's emergency mode, and any static-IP mistake. Use SSH for everything else. It gives you scrollback and copy/paste of output, and you can open several sessions.
 
 Or use the Cockpit Virtual Machines UI in a browser at `https://<kvm-host>:9090`.
 
@@ -910,7 +885,7 @@ scp "$RHCSA_SCRIPTS/ex3-verify.sh" student@172.16.40.22:~/    # foxtrot
 Tips:
 
 - Accept the host key on first connect, or add `-o StrictHostKeyChecking=accept-new`. The VMs share golden-image host keys but change IP after the network task, so `known_hosts` prompts are normal. Add `-o UserKnownHostsFile=/dev/null` if you would rather not keep the entries.
-- The `student` password is set in the kickstart/golden build. Run `ssh-copy-id student@<ip>` once per VM to skip it. After a snapshot revert the key is gone with the disk state — re-copy it, or copy the script fresh each time.
+- Your host key is injected into `student`'s `authorized_keys` before the exam-ready snapshot (Phase 3.3 / 4.3 / 5.3), so no password prompt appears, even after a `snapshot-revert`. VMs built before this change don't have it: run `ssh-copy-id student@<ip>` once, and re-run it after each revert, or rebuild them.
 - The destination `~/` is `/home/student`. Copying to `/root` needs root SSH, which the exams may lock down — stay with `student`.
 
 #### 3. Run it inside each VM
@@ -1062,9 +1037,9 @@ sudo virt-clone --original rhel10-golden --name rhel10-echo \
 sudo virt-clone --original rhel10-golden --name rhel10-foxtrot \
   --file /home/libvirt/images/rhel10-foxtrot.qcow2
 
-# Then repeat Phase 5.2 – 5.6: network, hostname/mem/vcpus, extra disks,
-# foxtrot's broken fstab + scrambled root, echo's labdata.service + SELinux
-# seeding, DVD ISO on echo + foxtrot, start + exam3-ready snapshot.
+# Then repeat Phase 5.2 – 5.6: network, hostname/serial console/SSH key/mem/vcpus,
+# extra disks, DVD ISO on echo + foxtrot, foxtrot's broken fstab + scrambled root,
+# echo's labdata.service + SELinux seeding over SSH, start + exam3-ready snapshot.
 ```
 
 > **Verify no orphans were left behind:** `sudo virsh vol-list homepool` should show only `rhel10-{host}.qcow2` names. Anything else (e.g. a stray `rhhost-*.qcow2`) is leftover from outside this naming convention — confirm no domain still references it (`sudo virsh dumpxml <domain> | grep qcow2`) before reclaiming the space with `sudo virsh vol-delete --pool homepool <file>`.
@@ -1075,17 +1050,29 @@ sudo virt-clone --original rhel10-golden --name rhel10-foxtrot \
 
 For rebuilding everything from scratch after a golden-image update:
 
-> Also shipped as `RHCSA-Lab-Scripts/rebuild-rhcsa-labs.sh` (it locates `add-disk.sh` beside itself, so no `RHCSA_SCRIPTS` needed).
+> Also shipped as `RHCSA-Lab-Scripts/rebuild-rhcsa-labs.sh`. It finds its sibling scripts (`add-disk.sh`, `vm-serial-console.sh`, `ex3-seed-echo.sh`) beside itself, so no `RHCSA_SCRIPTS` is needed. Run it as your normal user, not with `sudo`: it calls `sudo` itself, and it needs your SSH key pair (`~/.ssh/id_ed25519`, or set `SSH_PUBKEY=/path/to/key.pub`).
 
-> **Exam 3 caveat:** unlike Exam 1/2's pre-conditions (root password scrambles, `rescue.target`), which are set offline via `virt-customize --root-password`/`--run-command` with no boot required, Exam 3's seeding (Phase 5.5) writes multi-line unit files and runs `dnf install` interactively inside a booted VM. That part isn't folded into this script — it stops after building/networking/disking echo and foxtrot, and calls out the manual step before their own start + snapshot.
+> **Fully unattended, all three exams.** Exam 1/2 pre-conditions and foxtrot's broken `fstab` + scrambled root are set offline with `virt-customize`. Echo's Exam 3 seeding (`labdata.service`, the httpd SELinux violations) needs `dnf`, so the script boots echo, waits for SSH, pipes `ex3-seed-echo.sh` into `sudo bash`, and powers it off before the snapshot. Packages come from the attached DVD through a temporary repo, so no subscription is needed and no `.repo` file is left behind for Task 17.
 
 ```bash
 #!/usr/bin/env bash
 # rebuild-rhcsa-labs.sh — full teardown + rebuild of all three exam environments
+# Run as your normal user (it calls sudo itself) so SSH_PUBKEY resolves to YOUR key.
 set -euo pipefail
 
 POOL=/home/libvirt/images
-ADDDISK="$(dirname "$(readlink -f "$0")")/add-disk.sh"   # sibling script, wherever the repo is cloned
+SCRIPTS="$(dirname "$(readlink -f "$0")")"              # sibling scripts, wherever the repo is cloned
+ADDDISK="${SCRIPTS}/add-disk.sh"
+SSH_PUBKEY="${SSH_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"   # injected for 'student' on every exam VM
+SSH_KEY="${SSH_PUBKEY%.pub}"
+SSH_OPTS=(-i "${SSH_KEY}" -o BatchMode=yes -o ConnectTimeout=5
+          -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
+ALL_VMS=(rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta rhel10-echo rhel10-foxtrot)
+
+[[ -r ${SSH_PUBKEY} && -r ${SSH_KEY} ]] || {
+  echo "SSH key pair not found: ${SSH_KEY}{,.pub}. Create one (ssh-keygen -t ed25519) or set SSH_PUBKEY." >&2
+  exit 1
+}
 
 teardown() {
   for vm in "$@"; do
@@ -1094,8 +1081,33 @@ teardown() {
   done
 }
 
+# Wait for a DHCP lease and a working SSH login as student; prints the IP
+wait_for_ssh() {
+  local vm=$1 ip=""
+  for _ in $(seq 60); do
+    ip=$(sudo virsh domifaddr "${vm}" 2>/dev/null | awk '/ipv4/ {sub(/\/.*/, "", $4); print $4; exit}')
+    if [[ -n ${ip} ]] && ssh "${SSH_OPTS[@]}" student@"${ip}" true 2>/dev/null; then
+      echo "${ip}"
+      return 0
+    fi
+    sleep 5
+  done
+  echo "${vm}: no SSH after 5 minutes (try: sudo virsh console ${vm})" >&2
+  return 1
+}
+
+wait_for_shutoff() {
+  local vm=$1
+  for _ in $(seq 60); do
+    [[ $(sudo virsh domstate "${vm}") == "shut off" ]] && return 0
+    sleep 2
+  done
+  echo "${vm}: still running after 2 minutes" >&2
+  return 1
+}
+
 echo "== Tearing down existing exam VMs =="
-teardown rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta rhel10-echo rhel10-foxtrot
+teardown "${ALL_VMS[@]}"
 
 echo "== Cloning Exam 1 VMs =="
 sudo virt-clone --original rhel10-golden --name rhel10-alpha --file ${POOL}/rhel10-alpha.qcow2
@@ -1117,13 +1129,12 @@ sudo virsh attach-interface rhel10-delta   network rhcsa-net2 --model virtio --c
 sudo virsh attach-interface rhel10-echo    network rhcsa-net3 --model virtio --config
 sudo virsh attach-interface rhel10-foxtrot network rhcsa-net3 --model virtio --config
 
-echo "== Hostnames =="
-sudo virt-customize -d rhel10-alpha   --hostname rhel10-alpha
-sudo virt-customize -d rhel10-bravo   --hostname rhel10-bravo
-sudo virt-customize -d rhel10-charlie --hostname rhel10-charlie
-sudo virt-customize -d rhel10-delta   --hostname rhel10-delta
-sudo virt-customize -d rhel10-echo    --hostname rhel10-echo
-sudo virt-customize -d rhel10-foxtrot --hostname rhel10-foxtrot
+echo "== Hostnames, serial console, student SSH key =="
+for vm in "${ALL_VMS[@]}"; do
+  sudo virt-customize -d "${vm}" --hostname "${vm}" \
+    --run "${SCRIPTS}/vm-serial-console.sh" \
+    --ssh-inject "student:file:${SSH_PUBKEY}"
+done
 
 echo "== Disks =="
 sudo "${ADDDISK}" rhel10-alpha   sdb 10
@@ -1139,7 +1150,7 @@ sudo "${ADDDISK}" rhel10-foxtrot vdb 8
 
 echo "== Attaching DVD ISO to every exam VM (local repo source for all nodes) =="
 # sda is the golden image's built-in CD-ROM drive, so insert media rather than attach a new disk
-for vm in rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta rhel10-echo rhel10-foxtrot; do
+for vm in "${ALL_VMS[@]}"; do
   sudo virsh change-media "${vm}" sda \
     /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
 done
@@ -1149,46 +1160,64 @@ sudo virt-customize -d rhel10-bravo   --root-password "password:$(openssl rand -
 sudo virt-customize -d rhel10-charlie --root-password "password:$(openssl rand -base64 24)"
 sudo virt-customize -d rhel10-delta   --run-command 'systemctl set-default rescue.target'
 
-echo "== Starting Exam 1/2 VMs =="
-for vm in rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta; do
+echo "== Seeding Exam 3 foxtrot (offline): bogus fstab entry + scrambled root =="
+sudo virt-customize -d rhel10-foxtrot \
+  --append-line '/etc/fstab:UUID=deadbeef-0000-0000-0000-000000000000 /mnt/archive xfs defaults 0 0' \
+  --root-password "password:$(openssl rand -base64 24)"
+
+echo "== Seeding Exam 3 echo (over SSH): labdata.service + SELinux violations =="
+sudo virsh start rhel10-echo
+ECHO_IP=$(wait_for_ssh rhel10-echo)
+ssh "${SSH_OPTS[@]}" student@"${ECHO_IP}" 'sudo bash -s' < "${SCRIPTS}/ex3-seed-echo.sh"
+ssh "${SSH_OPTS[@]}" student@"${ECHO_IP}" 'sudo systemctl poweroff' || true
+wait_for_shutoff rhel10-echo
+
+echo "== Starting all exam VMs =="
+for vm in "${ALL_VMS[@]}"; do
   sudo virsh start "${vm}"
 done
 
-echo "== Snapshotting Exam 1/2 exam-ready states =="
+echo "== Snapshotting exam-ready states =="
 sudo virsh snapshot-create-as rhel10-alpha   exam1-ready "Exam 1 pristine"
 sudo virsh snapshot-create-as rhel10-bravo   exam1-ready "Exam 1 pristine"
 sudo virsh snapshot-create-as rhel10-charlie exam2-ready "Exam 2 pristine"
 sudo virsh snapshot-create-as rhel10-delta   exam2-ready "Exam 2 pristine"
+sudo virsh snapshot-create-as rhel10-echo    exam3-ready \
+  "Exam 3 pristine: echo labdata + SELinux seeded"
+sudo virsh snapshot-create-as rhel10-foxtrot exam3-ready \
+  "Exam 3 pristine: foxtrot fstab broken + root scrambled"
 
-echo "== DONE with automatable steps. =="
-echo "== NEXT: manually run Phase 5.5 (foxtrot fstab/root seed, echo labdata/SELinux seed) via 'virsh console', =="
-echo "==       then start + snapshot echo/foxtrot as exam3-ready per Phase 5.6. =="
+echo "== DONE. All six VMs are built, seeded and snapshotted. =="
+echo "==   Console: sudo virsh console <vm>   (GRUB menu, boot messages and login on serial) =="
+echo "==   SSH:     ssh student@<ip>           (key-based; find the IP with: sudo virsh domifaddr <vm>) =="
 ```
 
 ---
 
 ## 🚨 TROUBLESHOOTING
 
-| Symptom                                                                               | Cause / Fix                                                                                                                                                                                                                                                             |
-| ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Disks show as`/dev/vdb` not `/dev/sdb`                                            | Used virtio bus. Re-attach with SATA bus, or adapt the task text                                                                                                                                                                                                        |
-| delta boots to multi-user, not rescue                                                 | `set-default rescue.target` did not apply — re-run the virt-customize step                                                                                                                                                                                           |
-| Cannot break into bravo/charlie                                                       | Password was not scrambled — re-run with a fresh`openssl rand`                                                                                                                                                                                                       |
-| Two exams' VMs see each other                                                         | Wrong network — alpha/bravo on`rhcsa-net1`, charlie/delta on `rhcsa-net2`, echo/foxtrot on `rhcsa-net3`                                                                                                                                                          |
-| `snapshot-revert` fails: domain running                                             | Run`virsh destroy <vm>` first, then revert                                                                                                                                                                                                                            |
-| Static IP task breaks SSH access                                                      | Expected — use`virsh console` until the network task is done                                                                                                                                                                                                         |
-| Reboot test wipes a completed task                                                    | The task was not made persistent — redo it correctly                                                                                                                                                                                                                   |
-| GRUB edit will not accept the break-in args                                           | Press`e` at the boot menu, edit the `linux` line, then `Ctrl+X`                                                                                                                                                                                                   |
-| Extra disks missing after revert                                                      | Snapshot was taken before disks attached — re-take the exam-ready snapshot                                                                                                                                                                                             |
-| `dnf repolist` shows no `BaseOS`/`AppStream`                                    | DVD not attached or not mounted — check`virsh domblklist <vm>`, then `mount /dev/sr0 /mnt/rhel10iso` and `dnf clean all`                                                                                                                                         |
-| DVD ISO gone after`snapshot-revert`                                                 | Media was attached*after* the exam-ready snapshot — re-attach, then re-take the `examN-ready` snapshot                                                                                                                                                             |
-| Boot into emergency mode after adding ISO to`/etc/fstab`                            | Hardcoded`/dev/sr0` mount with no disc present — add `nofail` to the fstab options                                                                                                                                                                                 |
-| EPEL step (Task 13 "if connected") fails offline                                      | Expected — EPEL is an internet-only Fedora repo and is**not** on the DVD; skip it in offline runs                                                                                                                                                                |
-| `curl`/API download returns null `href`                                           | Access token expired (15-min life) or wrong checksum — re-run the token step and re-copy the**DVD** SHA-256                                                                                                                                                      |
-| Kickstart install hangs /`%packages` fails with "cannot find repo"                  | Used the**Boot ISO** with a kickstart — Boot ISO has no packages. Use the **DVD ISO** (`--location …-dvd.iso`) or switch to Path A                                                                                                                      |
-| Path A: "Error setting up base repository"                                            | Boot ISO can't reach packages — register via*Connect to Red Hat* or set a valid network Installation Source                                                                                                                                                          |
-| `subscription-manager register` / `ping` fails "Network is unreachable" on golden | `virt-sysprep`'s `dhcp-client-state` cleanup left the interface without a lease on this boot — check `ip a`, then `sudo nmcli device connect <iface>`. If that fails, confirm the host's `default` libvirt network is active (`sudo virsh net-list --all`) |
-| Orphaned`.qcow2` files remain after `virsh undefine --remove-all-storage`         | Domain's disk didn't follow the`rhel10-{host}` naming convention (e.g. an old `rhhost-*` file) — confirm no domain references it (`sudo virsh dumpxml <domain> \| grep qcow2`), then `sudo virsh vol-delete --pool homepool <file>`                             |
+| Symptom                                                                               | Cause / Fix                                                                                                                                                                                                                                                                                                                                                                |
+| ------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Disks show as`/dev/vdb` not `/dev/sdb`                                            | Used virtio bus. Re-attach with SATA bus, or adapt the task text                                                                                                                                                                                                                                                                                                           |
+| delta boots to multi-user, not rescue                                                 | `set-default rescue.target` did not apply — re-run the virt-customize step                                                                                                                                                                                                                                                                                              |
+| Cannot break into bravo/charlie                                                       | Password was not scrambled — re-run with a fresh`openssl rand`                                                                                                                                                                                                                                                                                                          |
+| Two exams' VMs see each other                                                         | Wrong network — alpha/bravo on`rhcsa-net1`, charlie/delta on `rhcsa-net2`, echo/foxtrot on `rhcsa-net3`                                                                                                                                                                                                                                                             |
+| `snapshot-revert` fails: domain running                                             | Run`virsh destroy <vm>` first, then revert                                                                                                                                                                                                                                                                                                                               |
+| Static IP task breaks SSH access                                                      | Expected — use`virsh console` until the network task is done                                                                                                                                                                                                                                                                                                            |
+| `virsh console` connects but stays blank                                            | Press Enter, since the VM may still be booting. If it stays blank, the VM was built without `vm-serial-console.sh` (no `console=ttyS0`). Get in with SSH or Cockpit and run the script's commands by hand with sudo, or shut the VM off and run `sudo virt-customize -d <vm> --run "$RHCSA_SCRIPTS/vm-serial-console.sh"`. Then re-take the `examN-ready` snapshot |
+| `ssh student@<ip>` asks for a password                                              | The VM predates `--ssh-inject`. Run `ssh-copy-id student@<ip>`, or rebuild with `rebuild-rhcsa-labs.sh`                                                                                                                                                                                                                                                              |
+| Reboot test wipes a completed task                                                    | The task was not made persistent — redo it correctly                                                                                                                                                                                                                                                                                                                      |
+| GRUB edit will not accept the break-in args                                           | Press`e` at the boot menu, edit the `linux` line, then `Ctrl+X`                                                                                                                                                                                                                                                                                                      |
+| Extra disks missing after revert                                                      | Snapshot was taken before disks attached — re-take the exam-ready snapshot                                                                                                                                                                                                                                                                                                |
+| `dnf repolist` shows no `BaseOS`/`AppStream`                                    | DVD not attached or not mounted — check`virsh domblklist <vm>`, then `mount /dev/sr0 /mnt/rhel10iso` and `dnf clean all`                                                                                                                                                                                                                                            |
+| DVD ISO gone after`snapshot-revert`                                                 | Media was attached*after* the exam-ready snapshot — re-attach, then re-take the `examN-ready` snapshot                                                                                                                                                                                                                                                                |
+| Boot into emergency mode after adding ISO to`/etc/fstab`                            | Hardcoded`/dev/sr0` mount with no disc present — add `nofail` to the fstab options                                                                                                                                                                                                                                                                                    |
+| EPEL step (Task 13 "if connected") fails offline                                      | Expected — EPEL is an internet-only Fedora repo and is**not** on the DVD; skip it in offline runs                                                                                                                                                                                                                                                                   |
+| `curl`/API download returns null `href`                                           | Access token expired (15-min life) or wrong checksum — re-run the token step and re-copy the**DVD** SHA-256                                                                                                                                                                                                                                                         |
+| Kickstart install hangs /`%packages` fails with "cannot find repo"                  | Used the**Boot ISO** with a kickstart — Boot ISO has no packages. Use the **DVD ISO** (`--location …-dvd.iso`) or switch to Path A                                                                                                                                                                                                                         |
+| Path A: "Error setting up base repository"                                            | Boot ISO can't reach packages — register via*Connect to Red Hat* or set a valid network Installation Source                                                                                                                                                                                                                                                             |
+| `subscription-manager register` / `ping` fails "Network is unreachable" on golden | `virt-sysprep`'s `dhcp-client-state` cleanup left the interface without a lease on this boot — check `ip a`, then `sudo nmcli device connect <iface>`. If that fails, confirm the host's `default` libvirt network is active (`sudo virsh net-list --all`)                                                                                                    |
+| Orphaned`.qcow2` files remain after `virsh undefine --remove-all-storage`         | Domain's disk didn't follow the`rhel10-{host}` naming convention (e.g. an old `rhhost-*` file) — confirm no domain references it (`sudo virsh dumpxml <domain> \| grep qcow2`), then `sudo virsh vol-delete --pool homepool <file>`                                                                                                                                |
 
 ---
 
