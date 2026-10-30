@@ -25,28 +25,19 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 
 | VM               | vCPU | RAM  | Primary Disk      | Extra Disks                              |
 | ---------------- | ---- | ---- | ----------------- | ---------------------------------------- |
-| `rhel10-alpha` | 2    | 2 GB | 20 GB`/dev/vda` | none (add 10 GB`/dev/vdb` after setup) |
+| `rhel10-alpha` | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`                        |
 | `rhel10-bravo` | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`, 5 GB `/dev/vdc`     |
 
-### VM Configuration Notes
+### Build and seed
 
-- Install **RHEL 10** minimal install on both VMs
-- Set up a **NAT/Host-Only network** so both VMs can communicate
-- Suggested IPs:
-  - `rhel10-alpha`: `192.168.100.10/24`
-  - `rhel10-bravo`: `192.168.100.20/24`
-- **Do NOT** configure SSH root login or repo access — those are exam tasks
-- Set root password on alpha to something you remember; **forget it on bravo** (Task 1 requires breaking in)
-- Add the 10 GB disk to `rhel10-alpha` **unpartitioned** after OS install for storage tasks
+Build and seed both VMs with [README.md](README.md): Phase 1 for `rhcsa-net1`, Phase 2 for `add-disk.sh`, Phase 2.5 for the DVD ISO, and Phase 3 for the VMs and the `exam1-ready` snapshot.
 
 ### Repo Setup (Pre-Task — Simulates Exam Environment)
 
-The real exam has repos pre-configured or gives you a URL. For lab purposes, either:
-
-- Subscribe with a Red Hat Developer account: `subscription-manager register`
-- Or mount the RHEL 10 ISO and configure a local repo (covered in Task 13)
-
-> **Attach the RHEL 10 ISO to both VMs' CD/DVD drives.** Bravo has no internet either. It needs a working repo for `nfs-utils` (Task 21), so repeat the Task 13 repo setup on bravo too.
+- Attach the RHEL 10 DVD ISO to **both** VMs. It appears as `/dev/sr0` in each (see README Phase 3.5b)
+- Don't register with `subscription-manager`. The real exam is offline, so the DVD is the only package source
+- Don't create the repo files yet. That's Task 13
+- Bravo needs packages too (Task 21 `nfs-utils`), so repeat the Task 13 repo setup on bravo
 
 ---
 
@@ -250,17 +241,6 @@ Ensure `PermitRootLogin yes` & `PasswordAuthentication yes` is set in `/etc/ssh/
 ### SECTION 5: Software Management
 
 ---
-
-> **Environment prep (not a graded task):** If the VM was registered with Red Hat, disable the builtin repos before continuing.
-
-```bash
-sudo subscription-manager repos --disable=rhel-10-for-x86_64-baseos-rpms
-sudo subscription-manager repos --disable=rhel-10-for-x86_64-appstream-rpms
-
-# Clean and Verify
-sudo dnf clean all
-dnf repolist
-```
 
 > **Environment prep (not a graded task):** Bravo also needs packages later (`nfs-utils` in Task 21). Once Task 13 works on alpha, do the same steps on bravo with the ISO attached to bravo's DVD drive.
 

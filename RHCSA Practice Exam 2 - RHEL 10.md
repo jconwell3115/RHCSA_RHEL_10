@@ -27,16 +27,9 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 | `rhel10-charlie` | 2    | 2 GB | 20 GB`/dev/vda` | 8 GB`/dev/vdb`, 6 GB `/dev/vdc`, 4 GB `/dev/vdd` |
 | `rhel10-delta`   | 2    | 2 GB | 20 GB`/dev/vda` | 8 GB`/dev/vdb`                                       |
 
-### VM Configuration Notes
+### Build and seed
 
-- Install **RHEL 10** minimal install on both VMs
-- Suggested IPs (different subnet than Exam #1 to avoid stale ARP/host key issues):
-  - `rhel10-charlie`: `10.20.30.11/24`
-  - `rhel10-delta`: `10.20.30.12/24`
-- **Break-in target is `charlie` this time** — forget the root password on `charlie` before starting
-- Boot `delta` into `rescue.target` initially so Task 2 forces you to change it
-- Do **not** pre-configure repos, SSH keys, or firewall rules — those are exam tasks
-- Add the extra disks **after** the OS install, unpartitioned
+Build and seed both VMs with [README.md](README.md): Phase 1 for `rhcsa-net2`, Phase 2 for `add-disk.sh`, Phase 2.5 for the DVD ISO, and Phase 4 for the VMs and the `exam2-ready` snapshot.
 
 ### Repo Setup (Pre-Task — Simulates Exam Environment)
 
