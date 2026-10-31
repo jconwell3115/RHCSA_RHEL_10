@@ -15,7 +15,7 @@ case "$(hostname -s)" in
     chk "T3  kernel args applied"      "grep -q 'audit=1' /proc/cmdline && ! grep -q ' quiet' /proc/cmdline"
     chk "T4  labdata.service active"   "systemctl is-active --quiet labdata.service"
     chk "T5  sshd drop-in present"     "test -f /etc/systemd/system/sshd.service.d/override.conf"
-    chk "T5  RestartSec=30"            "systemctl show sshd -p RestartSec | grep -q 30"
+    chk "T5  RestartSec=30"            "systemctl show sshd -p RestartUSec | grep -q 30"
     chk "T11 emma uid 3100"            "id -u emma | grep -qx 3100"
     chk "T11 noah home relocated"      "getent passwd noah | grep -q /srv/homes/noah"
     chk "T13 default ACL on share"     "getfacl /srv/shared/data 2>/dev/null | grep -q '^default:user:noah'"
@@ -45,6 +45,8 @@ case "$(hostname -s)" in
     chk "T35 delete error captured"    "grep -q 'installed refs' /home/emma/fp_delete_error.txt"
     ;;
   *foxtrot*)
+    chk "T15 static IPv4 .22"          "ip -4 addr show | grep -q '172.16.40.22'"
+    chk "T15 IPv6 address configured"  "ip -6 addr show | grep -q 'fd10::22'"
     chk "T1  boots clean / fstab sane" "mount -a"
     chk "T22 EX3SWAP active"           "swapon --show=LABEL --noheadings | grep -q EX3SWAP"
     chk "T22 priority 5"               "swapon --show=PRIO --noheadings | grep -q 5"

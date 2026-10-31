@@ -56,6 +56,7 @@ Build and seed both VMs with [README.md](README.md): Phase 1 for `rhcsa-net3`, P
 4. Where a task says "record the answer in `<file>`", the grader checks that file — the command alone isn't credit.
 5. Budget ~4 minutes per task. Flag anything over 8 minutes and come back.
 6. **Configure repositories first.** Nothing installs until Task 17 is done, and many earlier tasks need packages. Once foxtrot is recovered (Task 1), do Task 17 on echo before the rest, then set up the same repo on foxtrot (the DVD is attached to both as `/dev/sr0`). On the real EX200, do the repo task first too, whatever its number.
+7. **Work from a root shell.** Run `sudo -i` as soon as you log in to each host, and stay there unless a task names another user. The answer key's redirects to `/root/` depend on this, because the shell opens the target file before `sudo` runs.
 
 ---
 
@@ -123,7 +124,7 @@ Without editing the vendor-supplied unit file, override `sshd.service`:
 1. Add a drop-in so `sshd` restarts automatically 30 seconds after any failure
 2. Add a custom `Description` of `SSH Daemon (lab-tuned)`
 3. Verify the override is being read and identify the exact path of the file you created
-4. Record the output of `systemctl show sshd.service -p Restart -p RestartSec -p Description` into `/root/sshd_override.txt`
+4. Record the output of `systemctl show sshd.service -p Restart -p RestartUSec -p Description` into `/root/sshd_override.txt`
 5. Demonstrate how you would discard all overrides for a unit (document the command in the same file — do **not** actually run it)
 
 ---
@@ -136,14 +137,14 @@ Without editing the vendor-supplied unit file, override `sshd.service`:
 
 **Task 6 — Input/Output Redirection** *(echo)*
 
-Working in `/root`:
+Working in your home directory:
 
-1. Run `ls /etc /nonexistent` so that **stdout only** goes to `/root/redir_out.txt` and **stderr only** goes to `/root/redir_err.txt`
-2. Run the same command so that stdout **and** stderr both land in `/root/redir_both.txt` in a single file
-3. Append the current date to `/root/redir_out.txt` without truncating it
-4. Run `df -h` so the output is written to `/root/df_report.txt` **and** displayed on your terminal at the same time
-5. Run `find /etc -name '*.conf'` discarding all error messages but keeping the results in `/root/conf_list.txt`
-6. Use a here-document to create `/root/notes.txt` containing three lines of your choice
+1. Run `ls /etc /nonexistent` so that **stdout only** goes to `~/redir_out.txt` and **stderr only** goes to `~/redir_err.txt`
+2. Run the same command so that stdout **and** stderr both land in `~/redir_both.txt` in a single file
+3. Append the current date to `~/redir_out.txt` without truncating it
+4. Run `df -h` so the output is written to `~/df_report.txt` **and** displayed on your terminal at the same time
+5. Run `find /etc -name '*.conf'` discarding all error messages but keeping the results in `~/conf_list.txt`
+6. Use a here-document to create `~/notes.txt` containing three lines of your choice
 
 ---
 
@@ -253,14 +254,15 @@ Create `/srv/shared/data`, owned by `emma:research`, mode `2770`:
 
 ---
 
-**Task 15 — Two Connection Profiles and Resolution Order** *(echo)*
+**Task 15 — Two Connection Profiles and Resolution Order** *(both)*
 
-1. Configure the primary connection as a profile named `lab3-static` with the IPv4 address, **IPv6 address**, gateway, and DNS from the environment table; it must autoconnect at boot
-2. Create a **second** profile named `lab3-dhcp` on the same interface set to DHCP for IPv4 and automatic for IPv6, with autoconnect **disabled**
-3. Demonstrate switching between the two profiles and switching back to `lab3-static`
-4. Add both hosts to `/etc/hosts`
-5. Explain in `/root/resolution.txt`: which file controls the *order* in which hostname lookups consult files vs DNS, and which line in it applies
-6. Verify `foxtrot` resolves and responds by short hostname
+1. On `echo`, configure the primary connection as a profile named `lab3-static` with the IPv4 address, **IPv6 address**, gateway, and DNS from the environment table; it must autoconnect at boot
+2. On `echo`, create a **second** profile named `lab3-dhcp` on the same interface set to DHCP for IPv4 and automatic for IPv6, with autoconnect **disabled**
+3. On `echo`, demonstrate switching between the two profiles and switching back to `lab3-static`
+4. On `foxtrot`, configure the primary connection as `lab3-static` the same way, using foxtrot's values from the environment table
+5. On both hosts, set the hostname from the environment table and add both hosts to `/etc/hosts`
+6. On `echo`, explain in `/root/resolution.txt`: which file controls the *order* in which hostname lookups consult files vs DNS, and which line in it applies
+7. Verify `foxtrot` resolves and responds by short hostname from `echo`
 
 ---
 
@@ -594,7 +596,7 @@ case "$(hostname -s)" in
     chk "T3  kernel args applied"      "grep -q 'audit=1' /proc/cmdline && ! grep -q ' quiet' /proc/cmdline"
     chk "T4  labdata.service active"   "systemctl is-active --quiet labdata.service"
     chk "T5  sshd drop-in present"     "test -f /etc/systemd/system/sshd.service.d/override.conf"
-    chk "T5  RestartSec=30"            "systemctl show sshd -p RestartSec | grep -q 30"
+    chk "T5  RestartSec=30"            "systemctl show sshd -p RestartUSec | grep -q 30"
     chk "T11 emma uid 3100"            "id -u emma | grep -qx 3100"
     chk "T11 noah home relocated"      "getent passwd noah | grep -q /srv/homes/noah"
     chk "T13 default ACL on share"     "getfacl /srv/shared/data 2>/dev/null | grep -q '^default:user:noah'"
@@ -624,6 +626,8 @@ case "$(hostname -s)" in
     chk "T35 delete error captured"    "grep -q 'installed refs' /home/emma/fp_delete_error.txt"
     ;;
   *foxtrot*)
+    chk "T15 static IPv4 .22"          "ip -4 addr show | grep -q '172.16.40.22'"
+    chk "T15 IPv6 address configured"  "ip -6 addr show | grep -q 'fd10::22'"
     chk "T1  boots clean / fstab sane" "mount -a"
     chk "T22 EX3SWAP active"           "swapon --show=LABEL --noheadings | grep -q EX3SWAP"
     chk "T22 priority 5"               "swapon --show=PRIO --noheadings | grep -q 5"
@@ -735,7 +739,7 @@ RestartSec=30
 
 ```bash
 sudo systemctl daemon-reload
-systemctl show sshd.service -p Restart -p RestartSec -p Description > /root/sshd_override.txt
+systemctl show sshd.service -p Restart -p RestartUSec -p Description > /root/sshd_override.txt
 echo "# To discard all overrides: systemctl revert sshd.service" >> /root/sshd_override.txt
 systemctl cat sshd.service      # shows vendor unit + drop-in and their paths
 ```
@@ -749,12 +753,12 @@ systemctl cat sshd.service      # shows vendor unit + drop-in and their paths
 **T6 — Redirection**
 
 ```bash
-ls /etc /nonexistent > /root/redir_out.txt 2> /root/redir_err.txt
-ls /etc /nonexistent > /root/redir_both.txt 2>&1     # order matters
-date >> /root/redir_out.txt
-df -h | tee /root/df_report.txt
-find /etc -name '*.conf' 2>/dev/null > /root/conf_list.txt
-cat > /root/notes.txt <<'EOF'
+ls /etc /nonexistent > ~/redir_out.txt 2> ~/redir_err.txt
+ls /etc /nonexistent > ~/redir_both.txt 2>&1     # order matters
+date >> ~/redir_out.txt
+df -h | tee ~/df_report.txt
+find /etc -name '*.conf' 2>/dev/null > ~/conf_list.txt
+cat > ~/notes.txt <<'EOF'
 line one
 line two
 line three
@@ -796,7 +800,7 @@ find /tmp -type f -empty -delete
 ```bash
 tar czf /root/ssh_backup.tar.gz /etc/ssh
 tar cjf /root/ssh_backup.tar.bz2 /etc/ssh
-ls -l /root/ssh_backup.tar.* > /root/compression.txt   # bzip2 is normally smaller
+ls -l /root/ssh_backup.tar.* > /root/compression.txt   # bzip2 usually wins, but gzip is smaller here: /etc/ssh/moduli is repetitive and fills most of the archive
 tar tzf /root/ssh_backup.tar.gz > /root/archive_list.txt
 
 mkdir -p /root/restore
@@ -813,15 +817,28 @@ tar xjpf /root/ssh_backup.tar.bz2 -C /root/restore_full
 **T10 — Documentation**
 
 ```bash
-man 5 passwd                      # 1. section 5 (file formats)
+man -f passwd                     # 1. lists passwd (1) command and passwd (5) file format
+man man                           # 1. section table: 1 = commands, 5 = file formats
+man 5 passwd                      # 1. confirm: section 5 (file formats)
 man -k "partition table"          # 2. apropos — fdisk, sfdisk, cfdisk, parted, partprobe...
 man journalctl | grep -A3 '\-b'   # 3. -b / --boot, from man 1 journalctl
 ls /usr/share/doc/chrony/         # 4. e.g. /usr/share/doc/chrony/README
+dnf install -y info               # 5. minimal installs lack the info reader; needs the Task 17 repo
 info coreutils                    # 5. top node "GNU Coreutils"
 man 5 fstab                       # 6. describes /etc/fstab; 6th field = fsck pass order
+
+# The numbers are plain text: write all six lines in one here-document
+cat > /root/docs_answers.txt <<'EOF'
+1. Section 5 (man 5 passwd)
+2. fdisk, sfdisk, cfdisk, parted, partprobe
+3. -b / --boot, from man 1 journalctl
+4. /usr/share/doc/chrony/README
+5. GNU Coreutils
+6. /etc/fstab; the sixth field is the fsck pass order
+EOF
 ```
 
-Write the six answers into `/root/docs_answers.txt`. `man -k` is `apropos`; if it returns nothing, run `sudo mandb`. The sixth fstab field is the `fs_passno` — `0` = never check, `1` = root filesystem, `2` = other filesystems.
+`man -k` is `apropos`; if it returns nothing, run `sudo mandb`. The sixth fstab field is the `fs_passno` — `0` = never check, `1` = root filesystem, `2` = other filesystems.
 
 ---
 
@@ -838,12 +855,15 @@ sudo useradd -u 3100 -g research emma
 sudo useradd -u 3101 -g research noah
 ls -a /home/emma /home/noah          # skeleton copied at creation time
 
-sudo useradd -u 3102 -g research -d /opt/oscar -m oscar
+sudo useradd -u 3102 -d /opt/oscar -m oscar
 ls -a /opt/oscar
 
+sudo mkdir -p /srv/homes             # usermod -m does not create parent directories
 sudo usermod -d /srv/homes/noah -m noah
 getent passwd noah
-sudo restorecon -Rv /srv/homes/noah  # relocated homes need relabeling
+sudo semanage fcontext -a -e /home /srv/homes   # label /srv/homes like /home, or restorecon sets var_t
+sudo restorecon -Rv /srv/homes
+ls -Zd /srv/homes/noah               # user_home_dir_t
 ```
 
 `-m` with `-d` **moves** the existing contents. Skeleton files are copied only at creation — editing `/etc/skel` later does not retroactively update existing users.
@@ -881,6 +901,7 @@ sudo setfacl -d -m u:noah:rwx -d -m g:wheel:r-x /srv/shared/data
 
 sudo setfacl -m m::r-x /srv/shared/data
 getfacl /srv/shared/data > /root/acl_effective.txt
+echo "noah effective r-x: the r-x mask removes write from the rwx entry" >> /root/acl_effective.txt
 ```
 
 `getfacl` now shows `user:noah:rwx  #effective:r-x`. The mask is the **ceiling** on every named user, named group, and the owning group — effective permission is the ACL entry ANDed with the mask, so `noah`'s write bit is masked off without his entry changing.
@@ -947,6 +968,21 @@ sudo nmcli con mod lab3-dhcp connection.autoconnect no
 nmcli -g ipv4.method,ipv4.addresses,connection.autoconnect con show lab3-static
 nmcli -g ipv4.method,connection.autoconnect con show lab3-dhcp
 
+# 4. On foxtrot: same primary profile with foxtrot's values (no lab3-dhcp there)
+sudo nmcli con mod "<old profile>" connection.id lab3-static
+sudo nmcli con mod lab3-static ipv4.addresses 172.16.40.22/24
+sudo nmcli con mod lab3-static ipv4.gateway 172.16.40.1
+sudo nmcli con mod lab3-static ipv4.dns "172.16.40.1 1.1.1.1"
+sudo nmcli con mod lab3-static ipv4.method manual
+sudo nmcli con mod lab3-static ipv6.addresses fd10::22/64
+sudo nmcli con mod lab3-static ipv6.method manual
+sudo nmcli con mod lab3-static connection.autoconnect yes
+sudo nmcli con up lab3-static
+sudo hostnamectl set-hostname foxtrot.ex200.net
+printf '172.16.40.21 echo.ex200.net echo\n172.16.40.22 foxtrot.ex200.net foxtrot\n' \
+  | sudo tee -a /etc/hosts
+
+# Back on echo
 ip -4 addr show enp1s0
 ip -6 addr show enp1s0
 ping6 -c2 fd10::22                          # reach foxtrot over IPv6
