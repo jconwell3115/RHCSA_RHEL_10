@@ -268,6 +268,8 @@ Create `/srv/shared/data`, owned by `emma:research`, mode `2770`:
 
 **Task 16 — Firewalld Port Forwarding and Masquerade** *(echo)*
 
+> **Do Task 33 first.** `httpd` can't start on `echo` until that task is finished.
+
 1. Ensure `httpd` is installed, enabled, and serving on port `80`
 2. In the default zone, permanently forward incoming TCP port `8888` to local port `80`
 3. Enable masquerading permanently in that zone
@@ -1510,7 +1512,13 @@ Two distinct problems, each with its own correct fix:
 sudo semanage port -a -t http_port_t -p tcp 8404
 sudo semanage port -l | grep http_port_t
 
-# 2. /srv/intranet is default_t, not web content  → file context
+# httpd died at the bind, before reading /srv/intranet, so the second denial appears only now
+sudo systemctl start httpd
+curl http://localhost:8404/            # fails: httpd can't read the content
+sudo ausearch -m AVC -ts recent        # AVC naming the file under /srv/intranet
+ls -Zd /srv/intranet /var/www/html     # compare the labels
+
+# 2. /srv/intranet is not labeled as web content  → file context
 sudo semanage fcontext -a -t httpd_sys_content_t '/srv/intranet(/.*)?'
 sudo restorecon -Rv /srv/intranet
 
