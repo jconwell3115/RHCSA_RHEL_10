@@ -1,14 +1,15 @@
 #!/usr/bin/env bash
 # vm-serial-console.sh — runs INSIDE a guest (virt-customize --run) so 'virsh console'
-# shows the GRUB menu, kernel/boot messages, emergency/rescue shells and a login prompt
+# shows the GRUB menu, kernel/boot messages and a login prompt
 set -euo pipefail
 
-ARGS='console=tty0 console=ttyS0,115200'   # ttyS0 last = /dev/console, so emergency/rescue shells land on serial
+ARGS='console=ttyS0,115200 console=tty0'   # tty0 last = /dev/console, so break-in/emergency/rescue shells land on the graphical console, as on the exam
 
 # Kernel args: current BLS entries now, GRUB_CMDLINE_LINUX for future kernels / grub2-mkconfig
+# Strip existing console= first (a kickstart golden may already have one) so the order above always wins
+grubby --update-kernel=ALL --remove-args="console=tty0 console=ttyS0,115200"
 grubby --update-kernel=ALL --args="${ARGS}"
-grep -q 'console=ttyS0' /etc/default/grub ||
-  sed -i "s/^GRUB_CMDLINE_LINUX=\"\(.*\)\"/GRUB_CMDLINE_LINUX=\"\1 ${ARGS}\"/" /etc/default/grub
+sed -i -E "/^GRUB_CMDLINE_LINUX=/{s/ *console=[^ \"]*//g; s/\"\$/ ${ARGS}\"/; s/=\" /=\"/}" /etc/default/grub
 
 # GRUB menu on both the graphical console and serial (needed for the GRUB 'e' break-in tasks)
 sed -i '/^GRUB_TERMINAL\(_INPUT\|_OUTPUT\)\?=/d; /^GRUB_SERIAL_COMMAND=/d' /etc/default/grub

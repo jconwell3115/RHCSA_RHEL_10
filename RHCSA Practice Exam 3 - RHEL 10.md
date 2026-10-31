@@ -78,6 +78,8 @@ Build and seed both VMs with [README.md](README.md): Phase 1 for `rhcsa-net3`, P
 5. Ensure SELinux labels remain correct for any file you edited
 6. Reboot and confirm a clean multi-user boot with no manual intervention
 
+> **Lab note:** Every lab VM's `linux` line has `console=ttyS0,115200 console=tty0`, in that order. If you edit that line in GRUB, confirm both are there with `console=tty0` last. With `console=ttyS0,115200` last, the shell opens on serial and the graphical console looks hung. If that happens, run `sudo virsh console <vm>` on the host.
+
 ---
 
 **Task 2 — One-Shot Boot Into a Different Target** *(foxtrot)*
@@ -684,15 +686,19 @@ grubby --default-kernel
 sudo grubby --update-kernel=ALL --args="audit=1 transparent_hugepage=never"
 sudo grubby --update-kernel=ALL --remove-args="rhgb quiet"
 sudo reboot
-cat /proc/cmdline > /root/cmdline.txt
+cat /proc/cmdline | sudo tee /root/cmdline.txt
 ```
 
 **T4 — Failed service**
 
 ```bash
-systemctl status labdata.service > /root/labdata_diag.txt
-journalctl -xeu labdata.service >> /root/labdata_diag.txt
-# Reason: ExecStart=/usr/local/sbin/labdata-collect does not exist (status=203/EXEC)
+systemctl --failed    # lists every failed unit
+systemctl status labdata.service | sudo tee /root/labdata_diag.txt
+sudo journalctl -xeu labdata.service | sudo tee -a /root/labdata_diag.txt
+# status=203/EXEC only says the ExecStart binary could not run. Find which binary, then why:
+systemctl cat labdata.service | sudo tee -a /root/labdata_diag.txt        # ExecStart=/usr/local/sbin/labdata-collect --daemon
+ls -l /usr/local/sbin/labdata-collect 2>&1 | sudo tee -a /root/labdata_diag.txt
+# Reason: "No such file or directory", so the missing dependency is the binary itself
 
 sudo tee /usr/local/sbin/labdata-collect >/dev/null <<'EOF'
 #!/bin/bash
@@ -968,13 +974,13 @@ Bringing one profile up on a shared interface automatically brings the other dow
 
 > **Other ways to do this on RHEL 10.** All of these persist, because they all write NetworkManager keyfiles:
 >
-> | Tool | How | Exam notes |
-> |---|---|---|
-> | **`nmtui`** | A text menu: *Edit a connection* → fill in the fields → *Activate a connection*. It can also add a second profile and set the hostname. | **Often the fastest and least typo-prone choice under time pressure.** Changing the "Profile name" field renames the profile. Reactivate it afterwards to apply the changes. |
-> | **`nmcli con edit lab3-static`** | An interactive shell: `set ipv4.addresses 172.16.40.21/24`, `set ipv4.method manual`, `print`, `save`, `quit`. | Tab completion works, and `describe <property>` gives help on it. |
-> | **`nmcli con add ...` with all properties** | Creates and configures a profile in one long command. | Same result, but long lines invite typos. |
-> | **Edit the keyfile directly** | Edit `/etc/NetworkManager/system-connections/<name>.nmconnection`, then run `nmcli con reload` and `nmcli con up <name>`. | No syntax checking. The file must be mode `600`, owned by root, or NetworkManager ignores it. |
-> | **Cockpit / GNOME Settings** | The web console (`https://host:9090`, needs `cockpit.socket`) or the GUI Network panel. | Usually not worth the setup time on the exam. |
+> | Tool                                                | How                                                                                                                                           | Exam notes                                                                                                                                                                         |
+> | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+> | **`nmtui`**                                 | A text menu: *Edit a connection* → fill in the fields → *Activate a connection*. It can also add a second profile and set the hostname. | **Often the fastest and least typo-prone choice under time pressure.** Changing the "Profile name" field renames the profile. Reactivate it afterwards to apply the changes. |
+> | **`nmcli con edit lab3-static`**            | An interactive shell: `set ipv4.addresses 172.16.40.21/24`, `set ipv4.method manual`, `print`, `save`, `quit`.                      | Tab completion works, and `describe <property>` gives help on it.                                                                                                                |
+> | **`nmcli con add ...` with all properties** | Creates and configures a profile in one long command.                                                                                         | Same result, but long lines invite typos.                                                                                                                                          |
+> | **Edit the keyfile directly**                 | Edit `/etc/NetworkManager/system-connections/<name>.nmconnection`, then run `nmcli con reload` and `nmcli con up <name>`.               | No syntax checking. The file must be mode `600`, owned by root, or NetworkManager ignores it.                                                                                    |
+> | **Cockpit / GNOME Settings**                  | The web console (`https://host:9090`, needs `cockpit.socket`) or the GUI Network panel.                                                   | Usually not worth the setup time on the exam.                                                                                                                                      |
 >
 > **Gone or not persistent in RHEL 10:** `ifcfg-*` files and `ifup`/`ifdown` (`network-scripts`) have been removed. `ip addr add` and `ip route add` are lost at reboot. NetworkManager overwrites hand edits to `/etc/resolv.conf`.
 >

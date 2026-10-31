@@ -517,7 +517,7 @@ for vm in rhel10-alpha rhel10-bravo; do
 done
 ```
 
-> **Console + SSH access.** `vm-serial-console.sh` adds `console=tty0 console=ttyS0,115200` to the kernel command line, puts the GRUB menu on serial, and enables `serial-getty@ttyS0`. After that, `sudo virsh console <vm>` shows the GRUB menu (needed for the break-in tasks), boot messages, emergency/rescue shells and a login prompt. `--ssh-inject` adds your host key to `student`'s `authorized_keys`, so `ssh student@<ip>` works without a password. Both happen before the exam-ready snapshot, so they survive every `snapshot-revert`. Exam 4.3 and 5.3 use the same loop.
+> **Console + SSH access.** `vm-serial-console.sh` adds `console=ttyS0,115200 console=tty0` to the kernel command line, puts the GRUB menu on serial, and enables `serial-getty@ttyS0`. After that, `sudo virsh console <vm>` shows the GRUB menu, boot messages and a login prompt. `console=tty0` is last, so `/dev/console` is the graphical console. Break-in, emergency and rescue shells land there, as they would on the exam. `--ssh-inject` adds your host key to `student`'s `authorized_keys`, so `ssh student@<ip>` works without a password. Both happen before the exam-ready snapshot, so they survive every `snapshot-revert`. Exam 4.3 and 5.3 use the same loop.
 
 ### 3.4 — Attach extra disks
 
@@ -536,7 +536,7 @@ Task 1 requires bravo's root password to be unknown. Scramble it and discard the
 ```bash
 sudo virt-customize -d rhel10-bravo \
   --root-password "password:$(openssl rand -base64 24)"
-echo "bravo root password scrambled — break in via rd.break (Task 1)."
+echo "bravo root password scrambled — break in via init=/bin/bash (Task 1)."
 ```
 
 Leave alpha's root password at the known golden value (`RootLab_2026`).
@@ -777,11 +777,14 @@ Access the VMs. Every exam VM has a serial console and key-based SSH for `studen
 sudo virsh domifaddr rhel10-alpha                # 192.168.100.1xx before Task 4
 ssh student@192.168.100.1xx
 
-# Serial console: GRUB menu, boot messages, emergency/rescue shells, login prompt
+# Serial console: GRUB menu, boot messages, login prompt
 sudo virsh console rhel10-alpha                  # press Enter if the screen is blank; Ctrl+] to leave
+
+# Graphical console: GRUB menu, plus break-in, emergency and rescue shells
+virt-viewer --connect qemu:///system rhel10-alpha
 ```
 
-Use the console for anything that happens before sshd is up or when the network is broken: the GRUB break-in tasks (bravo, charlie), delta's `rescue.target`, foxtrot's emergency mode, and any static-IP mistake. Use SSH for everything else. It gives you scrollback and copy/paste of output, and you can open several sessions.
+Use the graphical console for the GRUB break-in tasks (bravo, charlie), delta's `rescue.target` and foxtrot's emergency mode. Use the serial console for a static-IP mistake or anything else that needs a login while the network is broken. Use SSH for everything else. It gives you scrollback and copy/paste of output, and you can open several sessions.
 
 Or use the Cockpit Virtual Machines UI in a browser at `https://<kvm-host>:9090`.
 
@@ -935,7 +938,7 @@ The verifiers only work over the network, so some hosts need a workaround during
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Exam 2**delta** — Task 11 sets `AllowUsers root emma frank`  | `student` can no longer log in. Copy the script to delta **before** the sshd task (grading spoilers aside), or read the checks from `RHCSA-Lab-Scripts/ex2-verify.sh` and run them by hand via `virsh console`. |
 | Exam 2**delta** boots to `rescue.target` (pre-condition)      | sshd is not running until Task 2 is done — scp only after the target is fixed.                                                                                                                                             |
-| Exam 3**foxtrot** — broken `fstab` / scrambled root (Task 1) | No sshd until Task 1 is fixed. Grade via the console, or after the repair.                                                                                                                                                  |
+| Exam 3**foxtrot** — broken `fstab` / scrambled root (Task 1) | No sshd until Task 1 is fixed. Grade via the graphical console, or after the repair.                                                                                                                                                  |
 | Static IP task done wrongly (bad address/gateway)                     | The VM is unreachable on its expected IP. Use`sudo virsh console <vm>` and fix networking first — that check will show `FAIL` anyway.                                                                                  |
 | The VM was never renamed (Task 4 skipped)                             | The script matches on`hostname -s`; with `rhel10-alpha` it still matches `*alpha*`, so it works — the `T4 hostname` check will simply fail.                                                                        |
 
@@ -1335,8 +1338,8 @@ sudo virsh define /home/libvirt/backups/<vm>.xml            # re-register a doma
 Per *RHCA in Ansible - Certification Path Timeline* (Obsidian vault note):
 
 - RHCSA (EX200) is the prerequisite, targeted mid-September 2026.
-- Use Exam 1 first (foundational methods: rd.break, fdisk, simple LVM).
-- Use Exam 2 second (advanced variants: init=/bin/bash, parted, striped LVM, ACLs, rich rules).
+- Use Exam 1 first (foundational methods: init=/bin/bash, fdisk, simple LVM).
+- Use Exam 2 second (advanced variants: parted, striped LVM, ACLs, rich rules).
 - Use Exam 3 third — a gap-fill paper covering the ~26 of 35 EX200 objectives Exams 1–2 never touched (I/O redirection, grep/regex, tar, unaided SELinux/service diagnosis, `grubby`, LV shrink, bind mounts, `/etc/cron.d`, and more). Expect a low first score (15–20/35) — that's the diagnostic working, not a failure.
 - Aim to pass all three practice exams at 25–30/35 or better before booking the real EX200.
 - The `rhel10-golden` image built in Phase 0 is reused by the RHCA lab — the RHCA guide references it rather than rebuilding.

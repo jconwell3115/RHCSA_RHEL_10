@@ -67,6 +67,8 @@ Read carefully before beginning:
 
 The root password on `rhel10-bravo` is unknown. Break into the system using the `init=/bin/bash` method, reset the root password to `RedHat10!`, and ensure SELinux labels are updated before the next boot. Reboot and confirm login.
 
+> **Lab note:** Every lab VM's `linux` line has `console=ttyS0,115200 console=tty0`, in that order. If you edit that line in GRUB, confirm both are there with `console=tty0` last. With `console=ttyS0,115200` last, the shell opens on serial and the graphical console looks hung. If that happens, run `sudo virsh console <vm>` on the host.
+
 ---
 
 **Task 2 — Configure Boot Target** *(bravo)*
@@ -762,7 +764,7 @@ echo "== $pass passed, $fail failed =="
 
 **T1 — Break into bravo**
 
-> Note from an earlier run: rd.break drops to an emergency mode, not a shell — `init=/bin/bash` is the method used here. *(Worth re-verifying on RHEL 10; standard Red Hat courseware still documents `rd.break` as valid.)*
+> `rd.break` is not a recovery method here. It stops the boot at an emergency shell in the initramfs, and that shell asks for the root password. It helps with a boot problem when you know the password, but it can't reset an unknown one. Use `init=/bin/bash`.
 
 Key steps: `init=/bin/bash`, `mount -o remount,rw /`, `passwd root`, `touch /.autorelabel`, `exec /sbin/reboot -f`
 

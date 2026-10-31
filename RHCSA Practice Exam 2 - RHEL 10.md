@@ -64,13 +64,15 @@ Build and seed both VMs with [README.md](README.md): Phase 1 for `rhcsa-net2`, P
 
 > Objective: Interrupt the boot process in order to gain access to a system
 
-The root password on `rhel10-charlie` is unknown. Use the **`init=/bin/bash`** method (not `rd.break`) to recover:
+The root password on `rhel10-charlie` is unknown. Use the **`init=/bin/bash`** method to recover:
 
 1. Interrupt GRUB, edit the kernel line, replace `ro` with `rw` and append `init=/bin/bash`
 2. Boot to a raw bash shell
 3. Reset the root password to `Ex200Pass!`
 4. Ensure SELinux will relabel on next boot
 5. Reboot cleanly
+
+> **Lab note:** Every lab VM's `linux` line has `console=ttyS0,115200 console=tty0`, in that order. If you edit that line in GRUB, confirm both are there with `console=tty0` last. With `console=ttyS0,115200` last, the shell opens on serial and the graphical console looks hung. If that happens, run `sudo virsh console <vm>` on the host.
 
 ---
 
@@ -808,7 +810,7 @@ exec /sbin/init             # hand PID 1 to systemd. Alternative: /sbin/reboot -
 ```
 
 - **No `sudo` in this task.** The recovery shell is already root, and nothing else (systemd, PAM, logins) is running yet.
-- **Why `rw` + `init=/bin/bash` differs from `rd.break`:** the kernel mounts the real root itself and runs bash as PID 1. There's no initramfs switch-root and no `chroot /sysroot`.
+- **What `rw` + `init=/bin/bash` does:** the initramfs still mounts the real root and switches to it, then bash runs as PID 1 in place of systemd. `rw` leaves root writable, and there's no `chroot /sysroot`.
 - **Plain `reboot` does not work.** It talks to systemd, which isn't running. Use `exec /sbin/init` or `reboot -f`.
 - **No `/.autorelabel` means a locked-out root.** `/etc/shadow` gets mislabeled, PAM can't read it under enforcing mode, and root login fails even with the right password.
 - The relabel reboot takes a minute or two and then reboots again. That's expected.
@@ -2479,7 +2481,6 @@ tar -xJf  /root/a.tar.xz -C /root/restore etc/ssh/sshd_config   # one member, no
 
 | Area            | Exam#1 approach           | Exam#2 approach                                                                                |
 | --------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
-| Root recovery   | `rd.break`              | `init=/bin/bash`                                                                             |
 | Boot target     | graphical → multi-user   | rescue → graphical                                                                            |
 | Partitions      | `fdisk` interactive     | `parted -s` scripted                                                                         |
 | Filesystems     | XFS + ext4                | XFS +**VFAT** + noexec/nodev/nosuid                                                      |
