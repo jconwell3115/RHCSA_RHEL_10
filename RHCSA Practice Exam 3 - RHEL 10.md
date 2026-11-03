@@ -288,7 +288,7 @@ Create `/srv/shared/data`, owned by `emma:research`, mode `2770`:
 1. Mount the RHEL 10 DVD persistently at `/mnt/dvd` (must not block boot if the disc is absent)
 2. Create a single repo file `/etc/yum.repos.d/lab3.repo` defining `BaseOS` and `AppStream` from that mount, with `gpgcheck=1` using the key on the media
 3. Verify with `dnf repolist`
-4. Determine which **package** provides the file `/usr/bin/semanage` `[/root/q1.txt]`
+4. Determine which **package** provides the file `/usr/sbin/semanage` `[/root/q1.txt]`
 5. Determine which **package** owns the already-installed file `/etc/chrony.conf` `[/root/q2.txt]`
 6. List every file the `chrony` package installs `[/root/q3.txt]`
 7. Search for packages whose summary mentions "network manager" `[/root/q4.txt]`
@@ -1075,7 +1075,7 @@ gpgkey=file:///mnt/dvd/RPM-GPG-KEY-redhat-release
 EOF
 
 dnf repolist
-dnf provides /usr/bin/semanage   > /root/q1.txt   # policycoreutils-python-utils
+dnf provides /usr/sbin/semanage  > /root/q1.txt   # policycoreutils-python-utils
 rpm -qf /etc/chrony.conf         > /root/q2.txt   # chrony
 rpm -ql chrony                   > /root/q3.txt
 dnf search "network manager"     > /root/q4.txt
@@ -1192,7 +1192,7 @@ sudo sha256sum /mnt/shrink/testfile | sudo tee /root/checksum_before.txt
 
 # --- the shrink ---
 sudo umount /mnt/shrink                       # ext4 CANNOT shrink while mounted
-sudo e2fsck -f /dev/vg_ex3/lv_shrink
+sudo e2fsck -f /dev/vg_ex3/lv_shrink          # check for a clean file system
 sudo lvreduce -L 2G -r /dev/vg_ex3/lv_shrink  # -r drives resize2fs via fsadm
 sudo mount -a
 
@@ -1206,6 +1206,8 @@ is backup, lvreduce, mkfs.xfs, restore.
 EOF
 ```
 
+**Reading `e2fsck -f`:** `-f` forces a full check even when the filesystem is marked clean. A clean run prints Pass 1–5 and a summary line (`/dev/vg_ex3/lv_shrink: 12/262144 files ...`) with no prompts, and `echo $?` returns `0`. A `Fix<y>?` prompt means the filesystem is damaged; answer `y` (or rerun with `-y`) until it comes back clean before shrinking. `resize2fs` refuses to shrink an unchecked filesystem (`Please run 'e2fsck -f ...' first`). `lvreduce -r` runs the check itself via fsadm, so the manual step is a safety habit, not a requirement.
+
 Always shrink the **filesystem before** the volume. `-r` does both in the right order; doing `lvreduce` alone on a full-size filesystem silently truncates it.
 
 **T22 — Replace swap**
@@ -1214,7 +1216,8 @@ Always shrink the **filesystem before** the volume. `-r` does both in the right 
 swapon --show > /root/swap_before.txt
 free -h >> /root/swap_before.txt
 
-sudo fdisk /dev/vdb     # g (if the disk is blank) → n → +1G → t → L → 19 (Linux swap) → w
+sudo fdisk /dev/vdb     # g → n → Enter → Enter → +1G → t → L → 19 (Linux swap) → w
+                        # skip g and fdisk silently makes a dos (MBR) label instead of GPT
 sudo partprobe /dev/vdb
 sudo mkswap -L EX3SWAP /dev/vdb1
 echo 'LABEL=EX3SWAP none swap defaults,pri=5 0 0' | sudo tee -a /etc/fstab
@@ -1227,7 +1230,7 @@ sudo swapoff /dev/mapper/rhel-swap
 sudo vi /etc/fstab                       # delete the old swap line by hand
 ```
 
-Edit `/etc/fstab` **by hand**. A scripted delete is where this task bites people — the LABEL line you just added also contains the word `swap`, so a naive `sed '/swap/d'` removes both and you lose the work. If you insist on scripting it, guard the new entry and diff before rebooting:
+  Edit `/etc/fstab` **by hand**. A scripted delete is where this task bites people — the LABEL line you just added also contains the word `swap`, so a naive `sed '/swap/d'` removes both and you lose the work. If you insist on scripting it, guard the new entry and diff before rebooting:
 
 ```bash
 sudo sed -i '/[[:space:]]swap[[:space:]]/{/EX3SWAP/!d}' /etc/fstab
@@ -1236,18 +1239,29 @@ diff /etc/fstab.bak /etc/fstab           # confirm EXACTLY one line went away
 
 ```bash
 sudo lvremove -y /dev/rhel/swap          # optional: reclaim the extents
+# If you remove the LV, ALSO drop it from the kernel command line, or dracut
+# stalls at boot: "Failed to find logical volume "rhel/swap"".
+# resume= may be resume=UUID=<old swap UUID> or resume=/dev/mapper/rhel-swap; pass it exactly.
+RESUME=$(sudo grubby --info=DEFAULT | grep -o 'resume=[^ "]*')
+echo "$RESUME"
+sudo grubby --update-kernel=ALL --remove-args="$RESUME rd.lvm.lv=rhel/swap"
+sudo grubby --info=DEFAULT | grep args   # confirm both are gone
+grep CMDLINE /etc/default/grub           # future kernels: remove them here too if present
 sudo mount -a && sudo swapon -a          # PROVE fstab is valid before rebooting
 sudo reboot
 
 swapon --show > /root/swap_after.txt
 ```
 
-`mount -a` before you reboot is the habit worth building — a bad fstab edit here is precisely the Task 1 failure, and you already know how expensive that recovery is. Removing the swap *entry* is what makes it permanent; `swapoff` alone reverts at boot.
+`mount -a` before you reboot is the habit worth building — a bad fstab edit here is precisely the Task 1 failure, and you already know how expensive that recovery is. Removing the swap *entry* is what makes it permanent; `swapoff` alone reverts at boot. Deleting the LV goes one step further: the installer put `rd.lvm.lv=rhel/swap` and a `resume=` argument (`resume=UUID=<swap UUID>` or `resume=/dev/mapper/rhel-swap`) on the kernel command line, and `mount -a` won't catch those. Leave `rd.lvm.lv` in and dracut logs `Failed to find logical volume "rhel/swap"`. Leave `resume=` in and boot hangs on `Job dev-disk-by\x2duuid-... (no limit)`, waiting forever for a device that no longer exists. To recover at GRUB, press `e`, delete both arguments, and boot with `Ctrl+x`. Then make the removal permanent with `grubby`. Either skip the `lvremove`, or run the `grubby --remove-args` step with it.
 
 **T23 — Mount options and remount**
 
 ```bash
-sudo fdisk /dev/vdb                      # n → +2G → (type defaults to Linux filesystem) → w
+sudo fdisk /dev/vdb                      # GPT: n → Enter → Enter → +2G → w
+                                         # MBR (dos): n → p → Enter → Enter → +2G → w
+                                         # (MBR asks primary/extended and number first;
+                                         #  +2G typed at the wrong prompt = "Value out of range")
 sudo partprobe /dev/vdb
 sudo mkfs.xfs /dev/vdb2
 sudo mkdir -p /data/vault
