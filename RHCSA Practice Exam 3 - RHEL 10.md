@@ -1,3 +1,4 @@
+
 ---
 title: RHCSA Practice Exam 3 - RHEL 10
 tags: [certifications, rhcsa, rhel10, practice, linux, gap-fill]
@@ -394,7 +395,7 @@ Exam 1 drove `fdisk` interactively and Exam 2 used `parted -s`. This time, use `
 **Task 26 — AutoFS With an Indirect Map** *(echo)*
 
 1. On `foxtrot`, export `/export/team` (from Task 25) to the lab subnet
-2. On `echo`, install `autofs` and configure an **indirect** map so `foxtrot:/export/team` mounts on demand at `/net/team`
+2. On `echo`, install `autofs` and configure an **indirect** map so `foxtrot:/export/team` mounts on demand at `/shares/team`
 3. Set the idle unmount timeout to `45` seconds
 4. Enable and start `autofs`
 5. Trigger the mount by accessing the path, and confirm it appears in `findmnt`
@@ -438,7 +439,7 @@ Using a drop-in file — do **not** edit `/etc/sysctl.conf`:
 2. List the queue, then display the **contents** of that queued job `[/root/at_job.txt]`
 3. Delete the job and confirm the queue is empty
 4. Configure `at` so that **only** user `emma` may submit jobs — no other non-root user
-5. Create a job in `/etc/cron.d/labreport` (not a user crontab) that runs `/usr/local/bin/labreport.sh` **as user `emma`** every Monday and Thursday at 05:45
+5. Create a job in `/etc/cron.d/labreport` (not a user crontab) that runs `/usr/local/bin/labreport.sh` **as user `emma`** every Monday and Thursday at 05:45. The script does not exist yet; create it so it appends the date to `/tmp/labreport.log`, and make it executable
 6. Explain in `/root/crond_note.txt` how a `/etc/cron.d` entry differs in format from a user crontab entry
 
 ---
@@ -1328,17 +1329,17 @@ With a space, `172.16.40.0/24` becomes a client with **default** options (`ro,ro
 
 ```bash
 # echo
-sudo dnf install -y autofs
-echo '/net/team  /etc/auto.team  --timeout=45' | sudo tee /etc/auto.master.d/team.autofs
-echo '*  -fstype=nfs4,rw  foxtrot.ex200.net:/export/&' | sudo tee /etc/auto.team
+sudo dnf install -y autofs nfs-utils     # nfs-utils provides mount.nfs; without it access fails silently
+echo '/shares  /etc/auto.team  --timeout=45' | sudo tee /etc/auto.master.d/team.autofs
+echo 'team  -rw  foxtrot.ex200.net:/export/team' | sudo tee /etc/auto.team
 sudo systemctl enable --now autofs
 
-ls /net/team/team          # key "team" → foxtrot:/export/team
-findmnt | grep team
-sleep 60 && findmnt | grep team    # gone
+ls /shares/team            # access triggers the mount
+findmnt /shares/team       # nfs foxtrot.ex200.net:/export/team
+sleep 60 && findmnt /shares/team || echo "unmounted"
 ```
 
-With the wildcard map above, the mount key is the directory name requested under `/net/team`. A single fixed share can equally use a direct map (`/-  /etc/auto.direct` with `/net/team  -rw  foxtrot:/export/team`).
+In an indirect map, the master map holds the **parent** directory and the map file holds the **key**, so `/shares` plus key `team` gives `/shares/team`. There's no `mkdir`, because autofs creates `/shares`, and `/shares/team` appears only when something accesses it (`ls /shares` looks empty until then). Avoid `/net` as a parent: RHEL's `/etc/auto.master` already uses it for `/net  -hosts`, which mounts a host's exports at `/net/<host>/<export path>`.
 
 ---
 
@@ -1395,12 +1396,18 @@ atq                                        # empty
 echo emma | sudo tee /etc/at.allow         # allow-list: only emma (plus root)
 sudo chmod 600 /etc/at.allow
 
+sudo tee /usr/local/bin/labreport.sh >/dev/null <<'EOF'
+#!/bin/bash
+date >> /tmp/labreport.log
+EOF
+sudo chmod 755 /usr/local/bin/labreport.sh   # emma must be able to execute it
+
 sudo tee /etc/cron.d/labreport >/dev/null <<'EOF'
 45 5 * * 1,4 emma /usr/local/bin/labreport.sh
 EOF
 
 cat > /root/crond_note.txt <<'EOF'
-A /etc/cron.d file has SIX time/command fields plus a USER field:
+A /etc/cron.d file has FIVE time fields, then a USER field, then the command:
   min hr dom mon dow  USER  command
 A user crontab (crontab -e) has no user field - it always runs as its owner.
 EOF
