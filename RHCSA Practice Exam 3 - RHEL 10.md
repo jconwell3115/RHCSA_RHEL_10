@@ -1,4 +1,3 @@
-
 ---
 title: RHCSA Practice Exam 3 - RHEL 10
 tags: [certifications, rhcsa, rhel10, practice, linux, gap-fill]
@@ -464,11 +463,13 @@ Write `/usr/local/bin/diskwatch.sh`:
 
 - Enable strict error handling (`set -euo pipefail`)
 - Accepts exactly one argument: a mount point
-- If no argument is given → usage message to **stderr**, exit `2`
+- Use `[ ]` or `test` for every conditional. Don't use `[[ ]]` or `(( ))`
+- If the argument count is not exactly one → usage message to **stderr**, exit `2`
+- If the argument is not an existing directory → `"No such directory: <arg>"` to **stderr**, exit `4`
 - If the argument is not a currently mounted path → `"Not mounted: <arg>"` to **stderr**, exit `3`
 - If usage of that filesystem is at or above 80% → print `CRITICAL: <arg> at NN%`, exit `1`
 - Otherwise print `OK: <arg> at NN%`, exit `0`
-- Test all four paths and record each exit code in `/root/diskwatch_tests.txt`
+- Test every path and record each exit code in `/root/diskwatch_tests.txt`
 
 ---
 
@@ -1418,8 +1419,7 @@ If `/etc/at.allow` exists, only users listed in it may use `at` and `/etc/at.den
 **T30 — Chrony**
 
 ```bash
-# foxtrot (server)
-sudo sed -i 's/^pool /#pool /; s/^server /#server /' /etc/chrony.conf
+# foxtrot (server) - keep its existing pool line; it syncs upstream and serves the subnet
 echo 'allow 172.16.40.0/24' | sudo tee -a /etc/chrony.conf
 echo 'local stratum 10'     | sudo tee -a /etc/chrony.conf
 sudo systemctl enable --now chronyd && sudo systemctl restart chronyd
@@ -1436,7 +1436,7 @@ sudo timedatectl set-timezone America/Denver
 timedatectl > /root/time_status.txt
 ```
 
-`local stratum 10` lets the server serve time even when it has no upstream source — necessary in an offline lab.
+Foxtrot keeps its `pool` line, because a server that syncs upstream hands out more accurate time. `local stratum 10` is only a fallback. It lets foxtrot keep serving its own clock when no upstream source is reachable, as in an offline lab or on the exam network. While the pool is reachable, chrony prefers it. Only `echo` has its `pool`/`server` lines commented out, because the task says to use **only** foxtrot.
 
 ---
 
@@ -1451,8 +1451,13 @@ set -euo pipefail
 
 usage() { echo "Usage: $0 <mountpoint>" >&2; exit 2; }
 
-[[ $# -eq 1 ]] || usage
+[ "$#" -eq 1 ] || usage
 target="$1"
+
+if [ ! -d "$target" ]; then
+    echo "No such directory: $target" >&2
+    exit 4
+fi
 
 if ! findmnt -n "$target" >/dev/null 2>&1; then
     echo "Not mounted: $target" >&2
@@ -1461,7 +1466,7 @@ fi
 
 pct=$(df --output=pcent "$target" | tail -1 | tr -d ' %')
 
-if (( pct >= 80 )); then
+if test "$pct" -ge 80; then
     echo "CRITICAL: $target at ${pct}%"
     exit 1
 fi
@@ -1471,13 +1476,26 @@ exit 0
 EOF
 sudo chmod 755 /usr/local/bin/diskwatch.sh
 
+# Full path: sudo -i's secure_path omits /usr/local/bin on RHEL
+D=/usr/local/bin/diskwatch.sh
 {
-  diskwatch.sh          ; echo "no-arg exit: $?"
-  diskwatch.sh /nope    ; echo "bad-path exit: $?"
-  diskwatch.sh /        ; echo "root exit: $?"
-  diskwatch.sh /boot    ; echo "boot exit: $?"
+  $D            ; echo "no-arg exit: $?"      # 2
+  $D /nope      ; echo "no-dir exit: $?"      # 4
+  $D /srv       ; echo "not-mounted exit: $?" # 3 (a directory, but not a mount point)
+  $D /          ; echo "root exit: $?"        # 0 or 1
+  $D /boot      ; echo "boot exit: $?"        # 0 or 1
 } > /root/diskwatch_tests.txt 2>&1
 ```
+
+To force the CRITICAL path, fill a small mount, for example `fallocate -l 900M /mnt/shrink/fill`, run `$D /mnt/shrink`, and then delete the file.
+
+**`[ ]` / `test` traps.** `[` is a command (the same as `test`), and `]` is its last argument. So:
+
+- Spaces are mandatory: `[ "$#" -eq 1 ]`. `["$#" -eq 1]` fails with `command not found`.
+- Quote variables: `[ -d $target ]` with an empty `$target` becomes `[ -d ]`, which is *true*. `[ -d "$target" ]` is correct.
+- `-eq -ne -lt -le -gt -ge` compare numbers. `=` and `!=` compare strings. `[ "$pct" > 80 ]` doesn't compare at all: it redirects output to a file named `80`.
+- `-z "$v"` is true when the string is empty, and `-n "$v"` when it is non-empty. File tests are `-e` (exists), `-f` (regular file), `-d` (directory), `-r`/`-w`/`-x` (permissions).
+- Combine tests with `[ a ] && [ b ]`, not `-a`/`-o` inside one bracket (deprecated and ambiguous).
 
 With `set -e` a non-zero command aborts the script, so the `if ! findmnt` guard must wrap the test — a bare `findmnt` would kill the script before your custom exit code ran.
 
@@ -1556,7 +1574,11 @@ The lesson is matching fix to denial *type*: a `name_bind` denial on a port need
 ```bash
 sudo getenforce                        # Enforcing
 # Generate a denial httpd genuinely lacks permission for:
-sudo cp /root/anaconda-ks.cfg /srv/intranet/secret.txt   # arrives as admin_home_t
+# Create the file in /root so it is labeled admin_home_t, then MOVE it.
+# A plain cp makes a new inode labeled httpd_sys_content_t, and there is no denial.
+echo "top secret" | sudo tee /root/secret.txt >/dev/null
+sudo mv /root/secret.txt /srv/intranet/secret.txt
+ls -Z /srv/intranet/secret.txt         # must show admin_home_t
 curl http://localhost:8404/secret.txt  # 403
 sudo ausearch -m AVC -ts recent | audit2why
 
@@ -1564,11 +1586,20 @@ sudo ausearch -m AVC -ts recent | audit2allow -M labhttpd
 cat labhttpd.te                        # ALWAYS read before installing
 sudo semodule -i labhttpd.pp
 sudo semodule -l | grep labhttpd
+curl http://localhost:8404/secret.txt  # may STILL be 403: see below
+
+# Round 2: the first denial was only { getattr }. httpd stops at the first failure,
+# so open/read are denied only after getattr is allowed. Regenerate under the same
+# name. "recent" covers only 10 minutes, so use "today" to keep the getattr AVC too.
+# The new module replaces the old one.
+sudo ausearch -m AVC -c httpd -ts today | audit2allow -M labhttpd
+cat labhttpd.te                        # getattr, open, read
+sudo semodule -i labhttpd.pp
 curl http://localhost:8404/secret.txt  # now succeeds
 
 cat > /root/policy_module.txt <<'EOF'
 A custom module grants a new permission permanently and system-wide.
-Here the file was simply mislabeled - restorecon would have fixed it
+Here the file was simply mislabeled (mv kept its admin_home_t label) - restorecon would have fixed it
 without weakening policy. Prefer, in order:
   1. restorecon / semanage fcontext  (wrong label)
   2. setsebool -P                    (policy already supports the case)
