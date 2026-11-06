@@ -283,15 +283,22 @@ You now have a reusable base. Every exam VM is a clone of this.
 
 ```bash
 sudo virsh start rhel10-golden
-sudo virsh console rhel10-golden
+virt-viewer --connect qemu:///system rhel10-golden
 ```
 
-Inside the VM:
+> Use `virt-viewer` (or Cockpit → Virtual Machines → rhel10-golden → Console), not `virsh console`. Golden has no serial console: `vm-serial-console.sh` is applied only to the clones during the rebuild, so `virsh console rhel10-golden` connects to a silent `ttyS0`.
+
+Inside the VM. Golden is not registered and has no repos, so `dnf upgrade` alone fails with `There are no enabled repositories`. Register only for the upgrade, then unregister, so the clones stay unregistered like the exam:
 
 ```bash
+sudo subscription-manager register --username <your-redhat-login>   # prompts for the password
 sudo dnf upgrade -y
+sudo subscription-manager unregister
+sudo subscription-manager clean
 sudo shutdown -h now
 ```
+
+> A free Red Hat Developer account works. The DVD ISO is no substitute here: it only holds its own release's packages, so it can't upgrade anything.
 
 > **Known gotcha:** if this golden VM was previously sysprepped, `virt-sysprep`'s `dhcp-client-state` cleanup means the interface can come up **without** a DHCP lease on the next boot. If `ping`/`subscription-manager` reports "Network is unreachable," check `ip a` for a missing `inet` address and bring it up manually:
 >
@@ -312,6 +319,23 @@ sudo virsh snapshot-delete rhel10-golden clean-baseline
 sudo virsh snapshot-create-as rhel10-golden clean-baseline \
   "Clean sysprepped RHEL 10 baseline ($(date +%F))"
 ```
+
+**Verify the network profile survived** (offline, golden shut off). Without it every clone boots with no network:
+
+```bash
+sudo virt-ls -d rhel10-golden /etc/NetworkManager/system-connections/
+# expect enp1s0.nmconnection (or similar)
+sudo virt-cat -d rhel10-golden /etc/NetworkManager/system-connections/enp1s0.nmconnection
+# expect: interface-name=enp1s0, [ipv4] method=auto, and NO mac-address= line
+```
+
+If the directory is empty, a sysprep ran without `-net-nmconn`. Boot golden and re-create the profile:
+
+```bash
+sudo nmcli con add type ethernet ifname enp1s0 con-name enp1s0 ipv4.method auto ipv6.method auto
+```
+
+Then shut golden down and re-run the sysprep above. If the profile has a `mac-address=` line, remove it with `sudo nmcli con modify enp1s0 802-3-ethernet.mac-address ""`, because clones get new MACs and won't match it. `rebuild-rhcsa-labs.sh` runs the same check and stops before tearing anything down if it fails.
 
 > **Naming convention:** always use `rhel10-{host}` for domain names and `rhel10-{host}.qcow2` for disk files (`rhel10-golden`, `rhel10-alpha`, `rhel10-bravo`, `rhel10-charlie`, `rhel10-delta`) — every clone/rebuild command in this guide already follows this. Stray naming (e.g. an old `rhhost-*` disk from outside this guide) leaves orphaned volumes behind once its domain is undefined — periodically check `sudo virsh vol-list homepool` for anything that doesn't match the pattern.
 
@@ -1064,6 +1088,7 @@ For rebuilding everything from scratch after a golden-image update:
 set -euo pipefail
 
 POOL=/home/libvirt/images
+DVD_ISO=/home/libvirt/iso/rhel-10.2-x86_64-dvd.iso    # README Phase 2.5
 SCRIPTS="$(dirname "$(readlink -f "$0")")"              # sibling scripts, wherever the repo is cloned
 ADDDISK="${SCRIPTS}/add-disk.sh"
 SSH_PUBKEY="${SSH_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"   # injected for 'student' on every exam VM
@@ -1072,9 +1097,32 @@ SSH_OPTS=(-i "${SSH_KEY}" -o BatchMode=yes -o ConnectTimeout=5
           -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
 ALL_VMS=(rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta rhel10-echo rhel10-foxtrot)
 
+[[ -f ${DVD_ISO} ]] || {
+  echo "DVD ISO not found: ${DVD_ISO}. Download it first (README Phase 2.5, rhel10-dvd-download.sh)." >&2
+  exit 1
+}
+
 [[ -r ${SSH_PUBKEY} && -r ${SSH_KEY} ]] || {
   echo "SSH key pair not found: ${SSH_KEY}{,.pub}. Create one (ssh-keygen -t ed25519) or set SSH_PUBKEY." >&2
   exit 1
+}
+
+# Golden must carry an NM keyfile profile that is not pinned to golden's MAC, or every
+# clone boots with no network (virt-sysprep's net-nmconn op deletes them; see README 0.7).
+check_golden_network() {
+  local dir=/etc/NetworkManager/system-connections f ok=0
+  for f in $(sudo virt-ls -d rhel10-golden "${dir}" 2>/dev/null | grep '\.nmconnection$'); do
+    if sudo virt-cat -d rhel10-golden "${dir}/${f}" | grep -q '^mac-address='; then
+      echo "golden: ${f} is pinned to a MAC address; clones will not match it" >&2
+    else
+      echo "golden: network profile ${f} OK"
+      ok=1
+    fi
+  done
+  (( ok )) || {
+    echo "golden has no usable NM profile in ${dir}. Re-add one (README 0.7) and re-sysprep with -net-nmconn before rebuilding." >&2
+    exit 1
+  }
 }
 
 teardown() {
@@ -1108,6 +1156,13 @@ wait_for_shutoff() {
   echo "${vm}: still running after 2 minutes" >&2
   return 1
 }
+
+echo "== Checking golden network profile =="
+[[ $(sudo virsh domstate rhel10-golden) == "shut off" ]] || {
+  echo "rhel10-golden is running; shut it down before rebuilding" >&2
+  exit 1
+}
+check_golden_network
 
 echo "== Tearing down existing exam VMs =="
 teardown "${ALL_VMS[@]}"
@@ -1155,7 +1210,7 @@ echo "== Attaching DVD ISO to every exam VM (local repo source for all nodes) ==
 # sda is the golden image's built-in CD-ROM drive, so insert media rather than attach a new disk
 for vm in "${ALL_VMS[@]}"; do
   sudo virsh change-media "${vm}" sda \
-    /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
+    "${DVD_ISO}" --insert --config
 done
 
 echo "== Seeding Exam 1/2 pre-conditions (offline, no boot needed) =="
@@ -1337,23 +1392,28 @@ sudo virsh define /home/libvirt/backups/<vm>.xml            # re-register a doma
 
 Per *RHCA in Ansible - Certification Path Timeline* (Obsidian vault note):
 
-- RHCSA (EX200) is the prerequisite, targeted mid-September 2026.
+- RHCSA (EX200) is the prerequisite.
 - Use Exam 1 first (foundational methods: init=/bin/bash, fdisk, simple LVM).
 - Use Exam 2 second (advanced variants: parted, striped LVM, ACLs, rich rules).
 - Use Exam 3 third — a gap-fill paper covering the ~26 of 35 EX200 objectives Exams 1–2 never touched (I/O redirection, grep/regex, tar, unaided SELinux/service diagnosis, `grubby`, LV shrink, bind mounts, `/etc/cron.d`, and more). Expect a low first score (15–20/35) — that's the diagnostic working, not a failure.
 - Aim to pass all three practice exams at 25–30/35 or better before booking the real EX200.
 - The `rhel10-golden` image built in Phase 0 is reused by the RHCA lab — the RHCA guide references it rather than rebuilding.
 
-### Recommended drill cadence (pre-September)
+### Recommended drill sequence
 
-| Week        | Activity                                                 |
-| ----------- | -------------------------------------------------------- |
-| Aug, week 1 | Full timed run of Exam 1; self-grade; note weak sections |
-| Aug, week 2 | Revert; redo only failed tasks; full re-run              |
-| Aug, week 3 | Full timed run of Exam 2 (harder variants)               |
-| Aug, week 4 | Revert; redo failed tasks; mixed drill of both           |
-| Sep, week 1 | Both exams back-to-back at 30/35+; book real EX200       |
-| Sep, week 2 | Light review; take real EX200                            |
+Measured in study time, not calendar dates. A full exam run is 3 hours, the length of the real EX200. Hours are rough; move to the next stage when you hit its target, not when the hours run out.
+
+| Stage | Study time | Activity                                                  | Move on when                        |
+| ----- | ---------- | --------------------------------------------------------- | ----------------------------------- |
+| 1     | ~6 h       | Exam 1 with the answer key open; read every explanation   | Each task makes sense               |
+| 2     | ~3 h       | Revert; Exam 1 timed, `man` pages only; self-grade      | Weak sections noted                 |
+| 3     | ~3 h       | Revert; redo only the failed Exam 1 tasks                 | 25/35 or better                     |
+| 4     | ~6 h       | Exam 2 with the answer key open                           | Each task makes sense               |
+| 5     | ~6 h       | Exam 2 timed and `man`-only, then redo failed tasks     | 25/35 or better                     |
+| 6     | ~8 h       | Exam 3 with the answer key open (gap-fill, densest paper) | Each task makes sense               |
+| 7     | ~6 h       | Exam 3 timed and `man`-only, then redo failed tasks     | 25/35 or better                     |
+| 8     | ~9 h       | All three back-to-back, timed and `man`-only            | 30/35+ on each; book the real EX200 |
+| 9     | ~2 h       | Light review of weak tasks only                           | Take the real EX200                 |
 
 ---
 

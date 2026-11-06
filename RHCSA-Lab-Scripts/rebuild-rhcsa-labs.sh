@@ -4,6 +4,7 @@
 set -euo pipefail
 
 POOL=/home/libvirt/images
+DVD_ISO=/home/libvirt/iso/rhel-10.2-x86_64-dvd.iso    # README Phase 2.5
 SCRIPTS="$(dirname "$(readlink -f "$0")")"              # sibling scripts, wherever the repo is cloned
 ADDDISK="${SCRIPTS}/add-disk.sh"
 SSH_PUBKEY="${SSH_PUBKEY:-$HOME/.ssh/id_ed25519.pub}"   # injected for 'student' on every exam VM
@@ -12,9 +13,32 @@ SSH_OPTS=(-i "${SSH_KEY}" -o BatchMode=yes -o ConnectTimeout=5
           -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR)
 ALL_VMS=(rhel10-alpha rhel10-bravo rhel10-charlie rhel10-delta rhel10-echo rhel10-foxtrot)
 
+[[ -f ${DVD_ISO} ]] || {
+  echo "DVD ISO not found: ${DVD_ISO}. Download it first (README Phase 2.5, rhel10-dvd-download.sh)." >&2
+  exit 1
+}
+
 [[ -r ${SSH_PUBKEY} && -r ${SSH_KEY} ]] || {
   echo "SSH key pair not found: ${SSH_KEY}{,.pub}. Create one (ssh-keygen -t ed25519) or set SSH_PUBKEY." >&2
   exit 1
+}
+
+# Golden must carry an NM keyfile profile that is not pinned to golden's MAC, or every
+# clone boots with no network (virt-sysprep's net-nmconn op deletes them; see README 0.7).
+check_golden_network() {
+  local dir=/etc/NetworkManager/system-connections f ok=0
+  for f in $(sudo virt-ls -d rhel10-golden "${dir}" 2>/dev/null | grep '\.nmconnection$'); do
+    if sudo virt-cat -d rhel10-golden "${dir}/${f}" | grep -q '^mac-address='; then
+      echo "golden: ${f} is pinned to a MAC address; clones will not match it" >&2
+    else
+      echo "golden: network profile ${f} OK"
+      ok=1
+    fi
+  done
+  (( ok )) || {
+    echo "golden has no usable NM profile in ${dir}. Re-add one (README 0.7) and re-sysprep with -net-nmconn before rebuilding." >&2
+    exit 1
+  }
 }
 
 teardown() {
@@ -48,6 +72,13 @@ wait_for_shutoff() {
   echo "${vm}: still running after 2 minutes" >&2
   return 1
 }
+
+echo "== Checking golden network profile =="
+[[ $(sudo virsh domstate rhel10-golden) == "shut off" ]] || {
+  echo "rhel10-golden is running; shut it down before rebuilding" >&2
+  exit 1
+}
+check_golden_network
 
 echo "== Tearing down existing exam VMs =="
 teardown "${ALL_VMS[@]}"
@@ -95,7 +126,7 @@ echo "== Attaching DVD ISO to every exam VM (local repo source for all nodes) ==
 # sda is the golden image's built-in CD-ROM drive, so insert media rather than attach a new disk
 for vm in "${ALL_VMS[@]}"; do
   sudo virsh change-media "${vm}" sda \
-    /home/libvirt/iso/rhel-10.2-x86_64-dvd.iso --insert --config
+    "${DVD_ISO}" --insert --config
 done
 
 echo "== Seeding Exam 1/2 pre-conditions (offline, no boot needed) =="
