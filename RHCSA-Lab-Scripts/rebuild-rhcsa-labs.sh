@@ -103,11 +103,17 @@ sudo virsh attach-interface rhel10-delta   network rhcsa-net2 --model virtio --c
 sudo virsh attach-interface rhel10-echo    network rhcsa-net3 --model virtio --config
 sudo virsh attach-interface rhel10-foxtrot network rhcsa-net3 --model virtio --config
 
-echo "== Hostnames, serial console, student SSH key =="
+echo "== Hostnames, serial console, student SSH key, grader script =="
+# Grader is copied offline: delta (rescue.target) and foxtrot (broken fstab) have no sshd yet
+declare -A EXAM_OF=([rhel10-alpha]=1 [rhel10-bravo]=1 [rhel10-charlie]=2
+                    [rhel10-delta]=2 [rhel10-echo]=3 [rhel10-foxtrot]=3)
 for vm in "${ALL_VMS[@]}"; do
+  grader="ex${EXAM_OF[${vm}]}-verify.sh"
   sudo virt-customize -d "${vm}" --hostname "${vm}" \
     --run "${SCRIPTS}/vm-serial-console.sh" \
-    --ssh-inject "student:file:${SSH_PUBKEY}"
+    --ssh-inject "student:file:${SSH_PUBKEY}" \
+    --upload "${SCRIPTS}/${grader}:/home/student/${grader}" \
+    --run-command "chown student:student /home/student/${grader} && chmod 755 /home/student/${grader}"
 done
 
 echo "== Disks =="
@@ -146,12 +152,12 @@ ssh "${SSH_OPTS[@]}" student@"${ECHO_IP}" 'sudo bash -s' < "${SCRIPTS}/ex3-seed-
 ssh "${SSH_OPTS[@]}" student@"${ECHO_IP}" 'sudo systemctl poweroff' || true
 wait_for_shutoff rhel10-echo
 
-echo "== Starting all exam VMs =="
+echo "== Confirming all exam VMs are shut off =="
 for vm in "${ALL_VMS[@]}"; do
-  sudo virsh start "${vm}"
+  wait_for_shutoff "${vm}"
 done
 
-echo "== Snapshotting exam-ready states =="
+echo "== Snapshotting exam-ready states (VMs shut off; a revert also leaves them off) =="
 sudo virsh snapshot-create-as rhel10-alpha   exam1-ready "Exam 1 pristine"
 sudo virsh snapshot-create-as rhel10-bravo   exam1-ready "Exam 1 pristine"
 sudo virsh snapshot-create-as rhel10-charlie exam2-ready "Exam 2 pristine"
@@ -161,6 +167,7 @@ sudo virsh snapshot-create-as rhel10-echo    exam3-ready \
 sudo virsh snapshot-create-as rhel10-foxtrot exam3-ready \
   "Exam 3 pristine: foxtrot fstab broken + root scrambled"
 
-echo "== DONE. All six VMs are built, seeded and snapshotted. =="
+echo "== DONE. All six VMs are built, seeded, snapshotted and shut off. =="
+echo "==   Start:   sudo virsh start <vm> =="
 echo "==   Console: sudo virsh console <vm>   (GRUB menu, boot messages and login on serial) =="
 echo "==   SSH:     ssh student@<ip>           (key-based; find the IP with: sudo virsh domifaddr <vm>) =="

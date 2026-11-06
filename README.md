@@ -891,6 +891,8 @@ Then make the VM renew its lease (reboot it, or inside the VM run `sudo nmcli de
 
 #### 2. SCP the script from the host into the VMs
 
+> **Already there after a rebuild.** `rebuild-rhcsa-labs.sh` copies each exam's grader to `/home/student/exN-verify.sh` (mode 755) offline, before the exam-ready snapshot. Every VM has it, including delta and foxtrot, which have no SSH at the start. It survives `snapshot-revert`, so skip to step 3. Use the `scp` commands below only after you edit a grader, or on VMs built before this change.
+
 Run this **on the KVM host**, from any directory. `RHCSA_SCRIPTS` is the variable you exported in Phase 2; the `student` account from the golden image is the login user.
 
 ```bash
@@ -960,7 +962,7 @@ The verifiers only work over the network, so some hosts need a workaround during
 
 | Situation                                                             | What to do                                                                                                                                                                                                                  |
 | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Exam 2**delta** — Task 11 sets `AllowUsers root emma frank`  | `student` can no longer log in. Copy the script to delta **before** the sshd task (grading spoilers aside), or read the checks from `RHCSA-Lab-Scripts/ex2-verify.sh` and run them by hand via `virsh console`. |
+| Exam 2**delta** — Task 11 sets `AllowUsers root emma frank`  | `student` can no longer log in over SSH. The rebuild already put the grader in `/home/student`, so log in as root on `virsh console` and run `bash /home/student/ex2-verify.sh`. |
 | Exam 2**delta** boots to `rescue.target` (pre-condition)      | sshd is not running until Task 2 is done — scp only after the target is fixed.                                                                                                                                             |
 | Exam 3**foxtrot** — broken `fstab` / scrambled root (Task 1) | No sshd until Task 1 is fixed. Grade via the graphical console, or after the repair.                                                                                                                                        |
 | Static IP task done wrongly (bad address/gateway)                     | The VM is unreachable on its expected IP. Use`sudo virsh console <vm>` and fix networking first — that check will show `FAIL` anyway.                                                                                  |
@@ -1187,11 +1189,17 @@ sudo virsh attach-interface rhel10-delta   network rhcsa-net2 --model virtio --c
 sudo virsh attach-interface rhel10-echo    network rhcsa-net3 --model virtio --config
 sudo virsh attach-interface rhel10-foxtrot network rhcsa-net3 --model virtio --config
 
-echo "== Hostnames, serial console, student SSH key =="
+echo "== Hostnames, serial console, student SSH key, grader script =="
+# Grader is copied offline: delta (rescue.target) and foxtrot (broken fstab) have no sshd yet
+declare -A EXAM_OF=([rhel10-alpha]=1 [rhel10-bravo]=1 [rhel10-charlie]=2
+                    [rhel10-delta]=2 [rhel10-echo]=3 [rhel10-foxtrot]=3)
 for vm in "${ALL_VMS[@]}"; do
+  grader="ex${EXAM_OF[${vm}]}-verify.sh"
   sudo virt-customize -d "${vm}" --hostname "${vm}" \
     --run "${SCRIPTS}/vm-serial-console.sh" \
-    --ssh-inject "student:file:${SSH_PUBKEY}"
+    --ssh-inject "student:file:${SSH_PUBKEY}" \
+    --upload "${SCRIPTS}/${grader}:/home/student/${grader}" \
+    --run-command "chown student:student /home/student/${grader} && chmod 755 /home/student/${grader}"
 done
 
 echo "== Disks =="
@@ -1230,12 +1238,12 @@ ssh "${SSH_OPTS[@]}" student@"${ECHO_IP}" 'sudo bash -s' < "${SCRIPTS}/ex3-seed-
 ssh "${SSH_OPTS[@]}" student@"${ECHO_IP}" 'sudo systemctl poweroff' || true
 wait_for_shutoff rhel10-echo
 
-echo "== Starting all exam VMs =="
+echo "== Confirming all exam VMs are shut off =="
 for vm in "${ALL_VMS[@]}"; do
-  sudo virsh start "${vm}"
+  wait_for_shutoff "${vm}"
 done
 
-echo "== Snapshotting exam-ready states =="
+echo "== Snapshotting exam-ready states (VMs shut off; a revert also leaves them off) =="
 sudo virsh snapshot-create-as rhel10-alpha   exam1-ready "Exam 1 pristine"
 sudo virsh snapshot-create-as rhel10-bravo   exam1-ready "Exam 1 pristine"
 sudo virsh snapshot-create-as rhel10-charlie exam2-ready "Exam 2 pristine"
@@ -1245,7 +1253,8 @@ sudo virsh snapshot-create-as rhel10-echo    exam3-ready \
 sudo virsh snapshot-create-as rhel10-foxtrot exam3-ready \
   "Exam 3 pristine: foxtrot fstab broken + root scrambled"
 
-echo "== DONE. All six VMs are built, seeded and snapshotted. =="
+echo "== DONE. All six VMs are built, seeded, snapshotted and shut off. =="
+echo "==   Start:   sudo virsh start <vm> =="
 echo "==   Console: sudo virsh console <vm>   (GRUB menu, boot messages and login on serial) =="
 echo "==   SSH:     ssh student@<ip>           (key-based; find the IP with: sudo virsh domifaddr <vm>) =="
 ```
