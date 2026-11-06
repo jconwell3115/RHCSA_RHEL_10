@@ -1,6 +1,6 @@
 #!/bin/bash
 # --- fill these two in ---
-#offline_token="vSbkaz8jgwimH2iUC6kC8c2FBGyHnHEsevT5.9kCdDYARJW7-4jhundVsi3d6uJcedvg6td6HRBgAiCVa0L7Pyf7d8lc4c_3Qhey0WMYOGkwCHb3cn7lIKK6Lvc3rRne8bQ9doXToWAaMYa-lL-_dFJyXevRXbJ22ayVFmjv5fH7oBLyJNBA3bqdW5eSZmgrCo7dV-gMWpOOFkfFkORXphT-5x_rSmRVBiAeR8UrWwD9TdsW3g4RzrwQRL21B4uQW.-gK73t4rJVpsBs5ca30zg5al1Z511VMWVj-7ecZNvgbD-TM26af2nRPf0V8xOqaoP_xiboA8YGmgIpsyvF001y"
+#offline_token="PASTE_OFFLINE_TOKEN"
 #checksum="675001a587c15f0c56c09beca6b1576c3be63cc4a0754e375ce93a6afda3dc8a"     # from developers.redhat.com download page
 #dest="/home/libvirt/iso"        # where libvirt can see it
 # -------------------------
