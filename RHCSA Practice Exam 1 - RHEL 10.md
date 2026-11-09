@@ -23,10 +23,10 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 
 ### Required Virtual Machines
 
-| VM               | vCPU | RAM  | Primary Disk      | Extra Disks                              |
-| ---------------- | ---- | ---- | ----------------- | ---------------------------------------- |
-| `rhel10-alpha` | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`                        |
-| `rhel10-bravo` | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`, 5 GB `/dev/vdc`     |
+| VM               | vCPU | RAM  | Primary Disk      | Extra Disks                          |
+| ---------------- | ---- | ---- | ----------------- | ------------------------------------ |
+| `rhel10-alpha` | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`                    |
+| `rhel10-bravo` | 2    | 2 GB | 20 GB`/dev/vda` | 10 GB`/dev/vdb`, 5 GB `/dev/vdc` |
 
 ### Build and seed
 
