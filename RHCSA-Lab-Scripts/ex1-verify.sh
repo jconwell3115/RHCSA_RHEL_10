@@ -38,7 +38,7 @@ case "$(hostname -s)" in
     chk "T23 direct map /autodir"      "grep -rqs '^/-' /etc/auto.master /etc/auto.master.d/ && grep -rqs '^/autodir' /etc/auto.*"
     chk "T23 indirect /mnt/autohome"   "grep -rqs '^/mnt/autohome' /etc/auto.master /etc/auto.master.d/"
     chk "T23 /autodir mounts on access" "ls /autodir && findmnt -t nfs,nfs4 /autodir"
-    chk "T24 /var/www/html 755 root"   "stat -c '%a %U' /var/www/html | grep -qx '755 root'"
+    chk "T24 webcontent root, o+r o-w"  "find /srv/webcontent -maxdepth 0 -user root -group root -perm -o+r ! -perm -o+w | grep -q ."
     chk "T24 /secure/app 2770"         "stat -c '%a' /secure/app | grep -qx 2770"
     chk "T24 badperms 640 bob"         "stat -c '%a %U:%G' /tmp/badperms | grep -qx '640 bob:developers'"
     chk "T25 chronyd enabled"          "systemctl is-enabled --quiet chronyd"

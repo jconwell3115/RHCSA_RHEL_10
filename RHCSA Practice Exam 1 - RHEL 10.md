@@ -432,10 +432,10 @@ On `alpha`, configure `autofs` to automatically mount user home directories from
 
 The following files and directories have incorrect permissions. Fix them:
 
-1. `/var/www/html/` — should be owned by `root:root`, world-readable, but not world-writable
+1. `/srv/webcontent/` — should be owned by `root:root`, world-readable, but not world-writable
 2. Create `/secure/app/` — owned by `alice:developers`, no access for others, SGID set
 3. A file `/tmp/badperms` exists with permissions `777` — change to `640`, owner `bob`, group `developers`
-4. Find all world-writable files under `/etc` and report them (save list to `/root/world_writable.txt`)
+4. Find all world-readable files under `/etc` and report them (save list to `/root/world_readable.txt`)
 
 ---
 
@@ -709,7 +709,7 @@ case "$(hostname -s)" in
     chk "T23 direct map /autodir"      "grep -rqs '^/-' /etc/auto.master /etc/auto.master.d/ && grep -rqs '^/autodir' /etc/auto.*"
     chk "T23 indirect /mnt/autohome"   "grep -rqs '^/mnt/autohome' /etc/auto.master /etc/auto.master.d/"
     chk "T23 /autodir mounts on access" "ls /autodir && findmnt -t nfs,nfs4 /autodir"
-    chk "T24 /var/www/html 755 root"   "stat -c '%a %U' /var/www/html | grep -qx '755 root'"
+    chk "T24 webcontent root, o+r o-w"  "find /srv/webcontent -maxdepth 0 -user root -group root -perm -o+r ! -perm -o+w | grep -q ."
     chk "T24 /secure/app 2770"         "stat -c '%a' /secure/app | grep -qx 2770"
     chk "T24 badperms 640 bob"         "stat -c '%a %U:%G' /tmp/badperms | grep -qx '640 bob:developers'"
     chk "T25 chronyd enabled"          "systemctl is-enabled --quiet chronyd"
@@ -1585,12 +1585,15 @@ bravo:/export/home/autouser   -> /mnt/autohome/autouser (auto-mounted on access)
 **T24 — Permission diagnostics**
 
 ```bash
-# Fix /var/www/html — root:root, world-readable, not world-writable
-sudo chown root:root /var/www/html
-sudo chmod 755 /var/www/html
+# Inspect first — the lab seeds it as nobody:nobody 777
+ls -ld /srv/webcontent
+
+# Fix /srv/webcontent — root:root, world-readable, not world-writable
+sudo chown root:root /srv/webcontent
+sudo chmod 755 /srv/webcontent
 
 # Verify
-ls -ld /var/www/html
+ls -ld /srv/webcontent
 
 # Create /secure/app — alice:developers, no access for others, SGID
 sudo mkdir -p /secure/app
@@ -1601,29 +1604,30 @@ sudo chmod 2770 /secure/app
 ls -ld /secure/app
 
 
-# Fix /tmp/badperms — 640, bob:developers
-sudo touch /tmp/badperms
+# Fix /tmp/badperms — 640, bob:developers (the lab seeds it as root:root 777)
+ls -l /tmp/badperms
 sudo chown bob:developers /tmp/badperms
 sudo chmod 640 /tmp/badperms
 
 # Verify
 ls -l /tmp/badperms
 
-# Find world-writable files under /etc and save the list
+# Find world-readable files under /etc and save the list (-perm -o+r = the others-read bit is set)
 # The redirect runs in your (non-root) shell, so "sudo find ... > /root/..." fails; let tee write the file as root
-sudo find /etc -perm -o+w -type f | sudo tee /root/world_writable.txt
+sudo find /etc -perm -o+r -type f | sudo tee /root/world_readable.txt > /dev/null
 
 # Verify
-sudo cat /root/world_writable.txt
+sudo wc -l /root/world_readable.txt     # ~1300 on alpha; most of /etc is 644
+sudo head /root/world_readable.txt
 ```
 
 **Expected Results:**
 
 ```text
-/var/www/html   drwxr-xr-x  root root
+/srv/webcontent drwxr-xr-x  root root
 /secure/app     drwxrws---  alice developers
 /tmp/badperms   -rw-r-----  bob developers
-/root/world_writable.txt   contains any world-writable files found under /etc
+/root/world_readable.txt   lists the world-readable files under /etc (~1300 lines)
 ```
 
 ---

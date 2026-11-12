@@ -565,6 +565,14 @@ echo "bravo root password scrambled — break in via init=/bin/bash (Task 1)."
 
 Leave alpha's root password at the known golden value (`RootLab_2026`).
 
+Task 24 needs permission faults on alpha to diagnose. `/srv/webcontent` is used instead of `/var/www/html` because `httpd-filesystem` owns that directory, and installing httpd during the exam would reset its permissions:
+
+```bash
+sudo virt-customize -d rhel10-alpha \
+  --run-command 'mkdir -p /srv/webcontent && chown nobody:nobody /srv/webcontent && chmod 777 /srv/webcontent' \
+  --run-command 'install -m 777 /dev/null /tmp/badperms'
+```
+
 ### 3.5b — Attach the DVD ISO to alpha and bravo (Task 13 repo source)
 
 > **Note:** the sda disk is created by deffault as the VMs CD-ROM drive and cannot be removed.  Modify it to insert the .iso as source repo.  If VM is off, remove the `--live` parameter.
@@ -1223,6 +1231,10 @@ for vm in "${ALL_VMS[@]}"; do
 done
 
 echo "== Seeding Exam 1/2 pre-conditions (offline, no boot needed) =="
+# alpha T24: faults to diagnose. /srv/webcontent is owned by no package, so no rpm install resets it
+sudo virt-customize -d rhel10-alpha \
+  --run-command 'mkdir -p /srv/webcontent && chown nobody:nobody /srv/webcontent && chmod 777 /srv/webcontent' \
+  --run-command 'install -m 777 /dev/null /tmp/badperms'
 sudo virt-customize -d rhel10-bravo   --root-password "password:$(openssl rand -base64 24)"
 sudo virt-customize -d rhel10-charlie --root-password "password:$(openssl rand -base64 24)"
 sudo virt-customize -d rhel10-delta   --run-command 'systemctl set-default rescue.target'
