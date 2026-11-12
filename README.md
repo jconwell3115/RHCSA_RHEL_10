@@ -514,13 +514,13 @@ sudo virt-clone --original rhel10-golden --name rhel10-bravo \
   --file /home/libvirt/images/rhel10-bravo.qcow2
 ```
 
-### 3.2 — Attach the Exam 1 network
+### 3.2 — Put the Exam 1 VMs on rhcsa-net1
 
 ```bash
+# Move the cloned NIC (enp1s0) off 'default' onto rhcsa-net1. --edit keeps the MAC and PCI
+# slot, so the guest still names it enp1s0. Detach + attach would create a new NIC.
 for vm in rhel10-alpha rhel10-bravo; do
-  sudo virsh detach-interface "${vm}" network --config || true
-  sudo virsh attach-interface "${vm}" network rhcsa-net1 \
-    --model virtio --config
+  sudo virt-xml "${vm}" --edit --network network=rhcsa-net1
 done
 ```
 
@@ -604,13 +604,13 @@ sudo virt-clone --original rhel10-golden --name rhel10-delta \
   --file /home/libvirt/images/rhel10-delta.qcow2
 ```
 
-### 4.2 — Attach the Exam 2 network
+### 4.2 — Put the Exam 2 VMs on rhcsa-net2
 
 ```bash
+# Move the cloned NIC (enp1s0) off 'default' onto rhcsa-net2. --edit keeps the MAC and PCI
+# slot, so the guest still names it enp1s0. Detach + attach would create a new NIC.
 for vm in rhel10-charlie rhel10-delta; do
-  sudo virsh detach-interface "${vm}" network --config || true
-  sudo virsh attach-interface "${vm}" network rhcsa-net2 \
-    --model virtio --config
+  sudo virt-xml "${vm}" --edit --network network=rhcsa-net2
 done
 ```
 
@@ -699,13 +699,13 @@ sudo virt-clone --original rhel10-golden --name rhel10-foxtrot \
   --file /home/libvirt/images/rhel10-foxtrot.qcow2
 ```
 
-### 5.2 — Attach the Exam 3 network
+### 5.2 — Put the Exam 3 VMs on rhcsa-net3
 
 ```bash
+# Move the cloned NIC (enp1s0) off 'default' onto rhcsa-net3. --edit keeps the MAC and PCI
+# slot, so the guest still names it enp1s0. Detach + attach would create a new NIC.
 for vm in rhel10-echo rhel10-foxtrot; do
-  sudo virsh detach-interface "${vm}" network --config || true
-  sudo virsh attach-interface "${vm}" network rhcsa-net3 \
-    --model virtio --config
+  sudo virt-xml "${vm}" --edit --network network=rhcsa-net3
 done
 ```
 
@@ -1182,12 +1182,13 @@ sudo virt-clone --original rhel10-golden --name rhel10-echo    --file ${POOL}/rh
 sudo virt-clone --original rhel10-golden --name rhel10-foxtrot --file ${POOL}/rhel10-foxtrot.qcow2
 
 echo "== Networking =="
-sudo virsh attach-interface rhel10-alpha   network rhcsa-net1 --model virtio --config
-sudo virsh attach-interface rhel10-bravo   network rhcsa-net1 --model virtio --config
-sudo virsh attach-interface rhel10-charlie network rhcsa-net2 --model virtio --config
-sudo virsh attach-interface rhel10-delta   network rhcsa-net2 --model virtio --config
-sudo virsh attach-interface rhel10-echo    network rhcsa-net3 --model virtio --config
-sudo virsh attach-interface rhel10-foxtrot network rhcsa-net3 --model virtio --config
+# Move golden's single NIC (enp1s0) from 'default' onto the exam network. --edit keeps its
+# MAC and PCI slot, so the guest still sees enp1s0 and its DHCP profile still applies.
+declare -A NET_OF=([rhel10-alpha]=rhcsa-net1 [rhel10-bravo]=rhcsa-net1 [rhel10-charlie]=rhcsa-net2
+                   [rhel10-delta]=rhcsa-net2 [rhel10-echo]=rhcsa-net3 [rhel10-foxtrot]=rhcsa-net3)
+for vm in "${ALL_VMS[@]}"; do
+  sudo virt-xml "${vm}" --edit --network network="${NET_OF[${vm}]}"
+done
 
 echo "== Hostnames, serial console, student SSH key, grader script =="
 # Grader is copied offline: delta (rescue.target) and foxtrot (broken fstab) have no sshd yet

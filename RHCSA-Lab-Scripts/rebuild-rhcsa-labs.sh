@@ -96,12 +96,13 @@ sudo virt-clone --original rhel10-golden --name rhel10-echo    --file ${POOL}/rh
 sudo virt-clone --original rhel10-golden --name rhel10-foxtrot --file ${POOL}/rhel10-foxtrot.qcow2
 
 echo "== Networking =="
-sudo virsh attach-interface rhel10-alpha   network rhcsa-net1 --model virtio --config
-sudo virsh attach-interface rhel10-bravo   network rhcsa-net1 --model virtio --config
-sudo virsh attach-interface rhel10-charlie network rhcsa-net2 --model virtio --config
-sudo virsh attach-interface rhel10-delta   network rhcsa-net2 --model virtio --config
-sudo virsh attach-interface rhel10-echo    network rhcsa-net3 --model virtio --config
-sudo virsh attach-interface rhel10-foxtrot network rhcsa-net3 --model virtio --config
+# Move golden's single NIC (enp1s0) from 'default' onto the exam network. --edit keeps its
+# MAC and PCI slot, so the guest still sees enp1s0 and its DHCP profile still applies.
+declare -A NET_OF=([rhel10-alpha]=rhcsa-net1 [rhel10-bravo]=rhcsa-net1 [rhel10-charlie]=rhcsa-net2
+                   [rhel10-delta]=rhcsa-net2 [rhel10-echo]=rhcsa-net3 [rhel10-foxtrot]=rhcsa-net3)
+for vm in "${ALL_VMS[@]}"; do
+  sudo virt-xml "${vm}" --edit --network network="${NET_OF[${vm}]}"
+done
 
 echo "== Hostnames, serial console, student SSH key, grader script =="
 # Grader is copied offline: delta (rescue.target) and foxtrot (broken fstab) have no sshd yet

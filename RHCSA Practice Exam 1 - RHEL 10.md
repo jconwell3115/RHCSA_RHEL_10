@@ -666,7 +666,7 @@ Mark each task after verifying it survives a reboot where applicable.
 
 ## ✅ Quick Verification Script
 
-Run on the relevant host **after a reboot**. Checks the objectively-verifiable, persistence-sensitive items only — it is a safety net against marking something "done" that didn't actually persist, not a full grader. Tasks needing human judgement (T11 SSH keys, T12 transfers, T30–32 script behaviour) aren't covered.
+Run on the relevant host **after a reboot**. Checks the objectively-verifiable, persistence-sensitive items only — it is a safety net against marking something "done" that didn't actually persist, not a full grader. Tasks needing human judgement (T11 SSH keys — only bravo's sshd settings are checked, T12 transfers, T30–32 script behaviour) aren't covered.
 
 ```bash
 #!/usr/bin/env bash
@@ -701,6 +701,14 @@ case "$(hostname -s)" in
     chk "T13 repo enabled"             "dnf repolist 2>/dev/null | grep -qi appstream"
     chk "T13 fstab has nofail"         "grep -q '/mnt/rhel10iso' /etc/fstab && grep '/mnt/rhel10iso' /etc/fstab | grep -q nofail"
     chk "T14 update result recorded"   "test -s /root/update_result.txt"
+    chk "T22 nfs_shared fstab _netdev" "grep '/mnt/nfs_shared' /etc/fstab | grep -q _netdev"
+    chk "T22 nfs_ro fstab _netdev"     "grep '/mnt/nfs_ro' /etc/fstab | grep -q _netdev"
+    chk "T22 nfs_shared mounted"       "findmnt -t nfs,nfs4 /mnt/nfs_shared"
+    chk "T22 nfs_ro mounted"           "findmnt -t nfs,nfs4 /mnt/nfs_ro"
+    chk "T23 autofs enabled"           "systemctl is-enabled --quiet autofs"
+    chk "T23 direct map /autodir"      "grep -rqs '^/-' /etc/auto.master /etc/auto.master.d/ && grep -rqs '^/autodir' /etc/auto.*"
+    chk "T23 indirect /mnt/autohome"   "grep -rqs '^/mnt/autohome' /etc/auto.master /etc/auto.master.d/"
+    chk "T23 /autodir mounts on access" "ls /autodir && findmnt -t nfs,nfs4 /autodir"
     chk "T24 /var/www/html 755 root"   "stat -c '%a %U' /var/www/html | grep -qx '755 root'"
     chk "T24 /secure/app 2770"         "stat -c '%a' /secure/app | grep -qx 2770"
     chk "T24 badperms 640 bob"         "stat -c '%a %U:%G' /tmp/badperms | grep -qx '640 bob:developers'"
@@ -730,6 +738,8 @@ case "$(hostname -s)" in
     chk "T4  hostname bravo.lab.local" "hostnamectl --static | grep -qx bravo.lab.local"
     chk "T4  static IPv4 .20"          "ip -4 addr show | grep -q '192.168.100.20'"
     chk "T10 umask drop-in"            "grep -rq 'umask 0*007' /etc/profile.d/"
+    chk "T11 sshd PermitRootLogin yes" "sshd -T | grep -qx 'permitrootlogin yes'"
+    chk "T11 sshd PasswordAuth yes"    "sshd -T | grep -qx 'passwordauthentication yes'"
     chk "T16 three partitions on vdb"  "test \$(lsblk -no NAME /dev/vdb | tail -n +2 | wc -l) -eq 3"
     chk "T17 xfs_data mounted"         "findmnt /mnt/xfs_data"
     chk "T17 mounted by UUID"          "grep -q '^UUID=' /etc/fstab && grep '/mnt/xfs_data' /etc/fstab | grep -q UUID"
@@ -743,6 +753,7 @@ case "$(hostname -s)" in
     chk "T21 nfs-server running"       "systemctl is-active --quiet nfs-server"
     chk "T21 exports present"          "exportfs -v | grep -q /export/shared"
     chk "T21 nfs firewall"             "firewall-cmd --list-services | grep -q nfs"
+    chk "T23 /export/home exported"    "exportfs -v | grep -q /export/home"
     chk "T33 SELinux permissive"       "grep -qE '^SELINUX=permissive' /etc/selinux/config"
     ;;
 esac
@@ -1148,8 +1159,10 @@ sudo dnf group remove "Development Tools" -y
 
 # Part B
 sudo dnf install flatpak -y            # if not already installed
-flatpak remotes
+flatpak remotes -d                     # RHEL 10 may already have 'rhel' → oci+https://flatpaks.redhat.io/rhel
 sudo flatpak remote-add --if-not-exists --no-gpg-verify rhel oci+http://127.0.0.1:1   # dummy URL; images come from the DVD
+sudo flatpak remote-modify --url=oci+http://127.0.0.1:1 --no-gpg-verify rhel          # forces the URL if 'rhel' already existed
+flatpak remotes -d                     # confirm URL is the dummy
 sudo flatpak install -y --sideload-repo=oci:/mnt/rhel10iso/Flatpaks rhel org.mozilla.firefox
 flatpak list                           # Firefox + com.redhat.Platform runtime
 flatpak info org.mozilla.firefox
@@ -1167,6 +1180,8 @@ rpm -q postgresql-server
 - `--sideload-repo=oci:PATH` pulls the images from the DVD instead of the network. The `rhel` remote only gives flatpak a name to install from, so its URL is a dummy. Pointing it at the real `oci+https://flatpaks.redhat.io/rhel` fails on a networked host with "Failed to get tokens … Please login to the Red Hat Registry".
 - `flatpak install oci:/mnt/rhel10iso/Flatpaks` (the `--image` form) fails with "Multiple images in registry" because the DVD images have no tags.
 - `flatpak search` and `flatpak update` need the remote's online index, so skip them offline.
+- `--if-not-exists` does nothing when `rhel` already exists, so the real URL stays in place. The install then sits on "Looking for matches…" until the network times out. The `remote-modify --url=` line prevents that.
+- On the exam, nothing public says whether `rhel` is preconfigured, because the exam environment is under NDA. Check with `flatpak remotes -d` first, then use the name and URL the task gives you: `remote-add --if-not-exists` followed by `remote-modify --url=`.
 
 > ⚠️ Legacy note (know it exists, don't rely on it): `dnf module list/enable/install/reset` still runs in RHEL 10 but prints "modularity is deprecated" and will be removed in the next major release. postgresql is no longer delivered as a module on RHEL 10, so `dnf module list postgresql` returns nothing — install the RPM directly.
 
