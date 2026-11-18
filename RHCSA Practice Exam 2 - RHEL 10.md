@@ -148,7 +148,7 @@ On `charlie`:
     Groups:
       ops        GID: 6000
       qateam     GID: 6001
-      auditors   GID: 6002  /etc/
+      auditors   GID: 6002  (system group)
 
     Users:
       emma    UID: 2100  primary: ops       supplementary: qateam        home: /srv/users/emma
@@ -826,11 +826,6 @@ exec /sbin/init             # hand PID 1 to systemd. Alternative: /sbin/reboot -
 # delta boots into rescue.target, so you get a root password prompt on the console
 systemctl get-default                   # rescue.target
 sudo systemctl set-default graphical.target  # just repoints the /etc/systemd/system/default.target symlink
-
-# Graphical target needs a GUI installed. Without one it falls back to a text login.
-# delta needs a repo first: mount the DVD and create the repo files as in Task 13 (see the T13 delta note)
-dnf group list --hidden | grep -i gui
-sudo dnf group install -y "Server with GUI"
 
 sudo systemctl reboot
 ```
@@ -2386,23 +2381,23 @@ sudo ls -l /root/restore/etc/ssh/sshd_config
 
 Pattern: `tar -<mode><compression><other>f ARCHIVE [paths]`. Pick one mode, add a compression letter if you need one, and put `f` **last** in the bundle, because the next word is the archive name.
 
-| Option | Long form | Meaning |
-|---|---|---|
-| `-c` | `--create` | create an archive (mode) |
-| `-x` | `--extract` | extract (mode) |
-| `-t` | `--list` | list contents (mode) |
-| `-r` | `--append` | add files to an existing **uncompressed** archive (mode) |
-| `-f FILE` | `--file` | archive filename; always lowercase, always followed by the name |
-| `-z` | `--gzip` | gzip → `.tar.gz` / `.tgz` |
-| `-j` | `--bzip2` | bzip2 → `.tar.bz2` |
-| `-J` | `--xz` | xz → `.tar.xz` (capital J) |
-| `-a` | `--auto-compress` | pick compression from the archive suffix (with `-c`) |
-| `-v` | `--verbose` | print each file as it's processed |
-| `-C DIR` | `--directory` | change to DIR first; the directory must already exist |
-| `-p` | `--preserve-permissions` | keep permissions on extract (default when root) |
-| | `--strip-components=N` | drop the first N path parts on extract |
-| | `--selinux` / `--acls` / `--xattrs` | store/restore SELinux contexts, ACLs, xattrs |
-| | `--exclude=PATTERN` | skip matching files when creating |
+| Option      | Long form                                 | Meaning                                                         |
+| ----------- | ----------------------------------------- | --------------------------------------------------------------- |
+| `-c`      | `--create`                              | create an archive (mode)                                        |
+| `-x`      | `--extract`                             | extract (mode)                                                  |
+| `-t`      | `--list`                                | list contents (mode)                                            |
+| `-r`      | `--append`                              | add files to an existing **uncompressed** archive (mode)  |
+| `-f FILE` | `--file`                                | archive filename; always lowercase, always followed by the name |
+| `-z`      | `--gzip`                                | gzip → `.tar.gz` / `.tgz`                                  |
+| `-j`      | `--bzip2`                               | bzip2 → `.tar.bz2`                                           |
+| `-J`      | `--xz`                                  | xz → `.tar.xz` (capital J)                                   |
+| `-a`      | `--auto-compress`                       | pick compression from the archive suffix (with `-c`)          |
+| `-v`      | `--verbose`                             | print each file as it's processed                               |
+| `-C DIR`  | `--directory`                           | change to DIR first; the directory must already exist           |
+| `-p`      | `--preserve-permissions`                | keep permissions on extract (default when root)                 |
+|             | `--strip-components=N`                  | drop the first N path parts on extract                          |
+|             | `--selinux` / `--acls` / `--xattrs` | store/restore SELinux contexts, ACLs, xattrs                    |
+|             | `--exclude=PATTERN`                     | skip matching files when creating                               |
 
 ```bash
 tar -cvJf /root/a.tar.xz /etc/ssh           # create, xz

@@ -58,8 +58,12 @@ case "$(hostname -s)" in
     chk "T34 httpd_enable_homedirs"    "getsebool httpd_enable_homedirs | grep -q ' on$'"
     chk "T35 hard link survives"       "grep -q 'RHCSA link test' /lab/links/hard.txt"
     chk "T35 soft link dangling"       "test -L /lab/links/soft.txt && ! test -e /lab/links/soft.txt"
-    chk "T35 bz2 archive has bobfile"  "tar -tjf /root/bobfiles.tar.bz2 | grep -q bobfile"
-    chk "T35 archive extracted"        "find /root/restore -name bobfile | grep -q ."
+    # bob's ~/.bashrc (from /etc/skel) is a file every bob account has; cp makes root-owned copies
+    chk "T35 bobfiles keeps full paths" "test -f /root/bobfiles/home/bob/.bashrc"
+    chk "T35 archive is bzip2"         "bzip2 -t /root/bobfiles.tar.bz2"
+    chk "T35 archive holds bob's files" "tar -tjf /root/bobfiles.tar.bz2 | grep -q 'bobfiles/home/bob/.bashrc$'"
+    chk "T35 file list saved"          "grep -q 'bobfiles/home/bob/.bashrc$' /root/bobfiles_list.txt"
+    chk "T35 archive extracted"        "find /root/restore -path '*/bobfiles/home/bob/.bashrc' -type f | grep -q ."
     chk "T35 services.gz + original"   "test -f /root/services.gz -a -f /root/services"
     ;;
   *bravo*)
