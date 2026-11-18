@@ -477,7 +477,7 @@ The following files and directories have incorrect permissions. Fix them:
 1. Launch three background `dd if=/dev/zero of=/dev/null` processes
 2. Use `ps`, `top`, or `pidstat` to identify them
 3. Use `renice` to change the niceness of one process to `10`
-4. Use `renice` to change the same process niceness to `-5` (requires root)
+4. Use `renice` to change the same process niceness to `-5` (requires root)I don't think it really matters
 5. Kill all `dd` processes using `killall`
 6. Start a `sleep 3600` process, then send it `SIGSTOP`, then `SIGCONT`, then `SIGTERM`
 7. Use `nice` to launch a new process `sleep 1000` with niceness `15`
@@ -715,9 +715,10 @@ case "$(hostname -s)" in
     chk "T25 chronyd enabled"          "systemctl is-enabled --quiet chronyd"
     chk "T25 timezone Chicago"         "timedatectl show -p Timezone --value | grep -qx America/Chicago"
     chk "T26 tuned lab-custom active"  "tuned-adm active | grep -q lab-custom"
-    chk "T26 ppd_base_profile set"     "grep -q lab-custom /etc/tuned/ppd_base_profile"
+    chk "T26 ppd.conf maps to lab-custom" "grep -qE '^[a-z-]+=lab-custom' /etc/tuned/ppd.conf"
+    chk "T26 tuned-ppd running"        "systemctl is-active --quiet tuned-ppd"
     chk "T28 journal persistent"       "test -d /var/log/journal"
-    chk "T28 rsyslog *.info rule"      "grep -qE '^\\*\\.info' /etc/rsyslog.conf"
+    chk "T28 rsyslog *.info rule"      "grep -rqsE '^\\*\\.info[[:space:]]+-?/var/log/messages\\.info' /etc/rsyslog.conf /etc/rsyslog.d/"
     chk "T29 hourly timer enabled"     "systemctl is-enabled --quiet hourly-check.timer"
     chk "T29 alice cron 8am"           "crontab -l -u alice 2>/dev/null | grep -q '^0 8'"
     chk "T32 etcbackup cron"           "crontab -l 2>/dev/null | grep -q 'etcbackup.sh'"
@@ -754,6 +755,13 @@ case "$(hostname -s)" in
     chk "T21 exports present"          "exportfs -v | grep -q /export/shared"
     chk "T21 nfs firewall"             "firewall-cmd --list-services | grep -q nfs"
     chk "T23 /export/home exported"    "exportfs -v | grep -q /export/home"
+    chk "T25 chronyd enabled"          "systemctl is-enabled --quiet chronyd"
+    chk "T25 chrony pool configured"   "grep -qE '^pool[[:space:]]+2\\.rhel\\.pool\\.ntp\\.org' /etc/chrony.conf"
+    chk "T25 timezone UTC"             "timedatectl show -p Timezone --value | grep -qxE '(Etc/)?UTC'"
+    chk "T28 journald drop-in persistent" "grep -rqs '^Storage=persistent' /etc/systemd/journald.conf.d/"
+    chk "T28 journal persistent"       "test -d /var/log/journal"
+    chk "T28 rsyslog *.info rule"      "grep -rqsE '^\\*\\.info[[:space:]]+-?/var/log/messages\\.info' /etc/rsyslog.conf /etc/rsyslog.d/"
+    chk "T28 messages.info written"    "test -s /var/log/messages.info"
     chk "T33 SELinux permissive"       "grep -qE '^SELINUX=permissive' /etc/selinux/config"
     ;;
 esac
@@ -1495,8 +1503,9 @@ sudo mkdir -p /mnt/nfs_shared
 sudo mkdir -p /mnt/nfs_ro
 
 # Add persistent NFS entries to /etc/fstab
-echo "192.168.100.20:/export/shared /mnt/nfs_shared nfs _netdev 0 0" | sudo tee -a /etc/fstab
-echo "192.168.100.20:/export/readonly /mnt/nfs_ro nfs _netdev 0 0" | sudo tee -a /etc/fstab
+# nofail: if bravo is slow or down at boot, the mount times out (90s) and boot carries on
+echo "192.168.100.20:/export/shared /mnt/nfs_shared nfs _netdev,nofail 0 0" | sudo tee -a /etc/fstab
+echo "192.168.100.20:/export/readonly /mnt/nfs_ro nfs _netdev,nofail 0 0" | sudo tee -a /etc/fstab
 
 # Verify fstab
 tail -2 /etc/fstab
@@ -1702,17 +1711,28 @@ sudo chmod 644 /etc/tuned/profiles/lab-custom/tuned.conf
 # Apply lab-custom and verify
 sudo tuned-adm profile lab-custom
 
-# In RHEL 10 power-profiles-daemon (ppd) is layered on top of
-# tuned and will override the profile after reboot if not set directly
+# RHEL 10: tuned-ppd re-applies a profile at boot, overriding tuned-adm.
+# ppd_base_profile holds a PPD MODE name, and ppd.conf [profiles] maps each mode
+# (left) to a TuneD profile (right). A mode not listed in [profiles] crashes
+# tuned-ppd at boot: KeyError: 'lab-custom'. So register lab-custom as a mode:
+sudo vi /etc/tuned/ppd.conf
+#   [main]      default=balanced  ->  default=lab-custom
+#   [profiles]  add a line:           lab-custom=lab-custom
+#   keep power-saver=, balanced=, performance= (tuned-ppd refuses to start without them)
 echo "lab-custom" | sudo tee /etc/tuned/ppd_base_profile
-sudo systemctl restart tuned
-tuned-adm active
+sudo systemctl restart tuned-ppd
+systemctl is-active tuned-ppd        # active
+tuned-adm active                     # lab-custom
+# With the mapping in place, tuned-ppd also records future changes itself:
+# 'tuned-adm profile lab-custom' writes lab-custom to ppd_base_profile.
+# An unmapped profile is logged as "unknown" and is NOT saved, so a reboot reverts it.
 
 # Ensure persistence before reboot
 systemctl is-enabled tuned           # 1. enabled
 cat /etc/tuned/active_profile        # 2. your profile name
 cat /etc/tuned/profile_mode          # 3. manual
-cat /etc/tuned/ppd_base_profile      # 4. your profile name  ← RHEL 10 addition
+cat /etc/tuned/ppd_base_profile      # 4. lab-custom          ← RHEL 10 addition: the PPD mode re-applied at boot
+grep lab-custom /etc/tuned/ppd.conf  # 5. default=lab-custom + lab-custom=lab-custom
 
 
 # Reboot and verify
