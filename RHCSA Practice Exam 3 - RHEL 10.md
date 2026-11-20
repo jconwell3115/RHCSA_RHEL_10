@@ -285,8 +285,8 @@ Create `/srv/shared/data`, owned by `emma:research`, mode `2770`:
 
 **Task 17 — Repository Setup and Package Queries** *(echo)*
 
-1. Mount the RHEL 10 DVD persistently at `/mnt/dvd` (must not block boot if the disc is absent)
-2. Create a single repo file `/etc/yum.repos.d/lab3.repo` defining `BaseOS` and `AppStream` from that mount, with `gpgcheck=1` using the key on the media
+1. Mount the RHEL 10 DVD (attached as `/dev/sr0`) persistently at `/mnt/dvd` (must not block boot if the disc is absent)
+2. Create a single repo file `/etc/yum.repos.d/lab3.repo` defining repo IDs `BaseOS` (baseurl `file:///mnt/dvd/BaseOS`) and `AppStream` (baseurl `file:///mnt/dvd/AppStream`), with `gpgcheck=1` using the key `/mnt/dvd/RPM-GPG-KEY-redhat-release`
 3. Verify with `dnf repolist`
 4. Determine which **package** provides the file `/usr/sbin/semanage` `[/root/q1.txt]`
 5. Determine which **package** owns the already-installed file `/etc/chrony.conf` `[/root/q2.txt]`
@@ -524,7 +524,7 @@ Write `/usr/local/bin/userreport.sh` that produces a report at `/var/log/userrep
 **Task 35 — Per-User Flatpak From the DVD** *(echo, as user `emma`)*
 
 1. As `root`, ensure `flatpak` is installed. Do **not** add any system-wide remote.
-2. As `emma`, with no `sudo`, configure a **per-user** remote named `dvd-user` and use it to install `org.mozilla.Thunderbird` from the Flatpak images on the DVD mounted at `/mnt/dvd`. Thunderbird must go into emma's installation only, not the system one.
+2. As `emma`, with no `sudo`, configure a **per-user** remote named `dvd-user` with the URL `oci+http://127.0.0.1:1` (a placeholder: nothing listens there) and use it to install `org.mozilla.Thunderbird` from the Flatpak OCI images on the DVD at `/mnt/dvd/Flatpaks`. Thunderbird must go into emma's installation only, not the system one.
 3. Record the on-disk location of emma's Thunderbird install `[/home/emma/fp_location.txt]`
 4. List only the **runtimes** in emma's installation `[/home/emma/fp_runtimes.txt]`
 5. As `root`, list the **system-wide** installed apps, showing Thunderbird is not among them `[/root/fp_system.txt]`

@@ -252,7 +252,7 @@ Ensure `PermitRootLogin yes` & `PasswordAuthentication yes` is set in `/etc/ssh/
 
 Configure a local YUM/DNF repository from the RHEL 10 installation ISO:
 
-1. Mount the RHEL 10 ISO at `/mnt/rhel10iso`
+1. Mount the RHEL 10 ISO (attached as `/dev/sr0`) at `/mnt/rhel10iso`
 2. Create a repo file `/etc/yum.repos.d/rhel10-local.repo` with:
    - `[BaseOS]` section pointing to `file:///mnt/rhel10iso/BaseOS`
    - `[AppStream]` section pointing to `file:///mnt/rhel10iso/AppStream`
@@ -290,8 +290,9 @@ Part A — Package groups:
 
 Part B — Flatpak (now a mandatory RHCSA objective):
 
-- No internet: use the Flatpaks on the mounted RHEL 10 DVD (`/mnt/rhel10iso/Flatpaks`)
-- Add a system-wide remote named `rhel`, then install Firefox from the DVD
+- No internet: use the Flatpak OCI images on the mounted RHEL 10 DVD (`/mnt/rhel10iso/Flatpaks`)
+- Configure a system-wide remote named `rhel` with the URL `oci+http://127.0.0.1:1` (a placeholder: nothing listens there, the images come from the DVD). A `rhel` remote may already exist; make sure it uses this URL.
+- Install Firefox (`org.mozilla.firefox`) from the DVD images
 - List, run, and remove the application
 - Clean up unused runtimes
 

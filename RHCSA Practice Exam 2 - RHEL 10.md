@@ -238,7 +238,7 @@ On `delta`:
 
 > Objective: Configure key-based authentication for SSH
 
-1. As `root` on `charlie`, generate an **ecdsa-sha2-nistp521** key (no passphrase)
+1. As `root` on `charlie`, generate an **ecdsa** key (no passphrase)
 2. Copy the key to `root@delta` using `ssh-copy-id`
 3. Create `emma` on `delta` (same UID) and set up key auth from `emma@charlie` → `emma@delta` using an **ed25519** key with passphrase `Lab#2026`
 4. On `delta`, configure `sshd_config` so:
@@ -270,8 +270,10 @@ On `delta`:
 
 > Objective: Configure access to RPM repositories, install/remove RPM software packages
 
-1. Mount RHEL 10 ISO at `/mnt/rhel10`
-2. Create `/etc/yum.repos.d/lab-baseos.repo` and `/etc/yum.repos.d/lab-appstream.repo` (**two separate files** this time)
+1. Mount the RHEL 10 ISO (attached as `/dev/sr0`) at `/mnt/rhel10`
+2. Create `/etc/yum.repos.d/lab-baseos.repo` and `/etc/yum.repos.d/lab-appstream.repo` (**two separate files** this time):
+   - repo ID `lab-baseos`, baseurl `file:///mnt/rhel10/BaseOS`
+   - repo ID `lab-appstream`, baseurl `file:///mnt/rhel10/AppStream`
 3. Both must have `gpgcheck=1` — import the GPG key from `/mnt/rhel10/RPM-GPG-KEY-redhat-release`
 4. Set `enabled=1` and `metadata_expire=1h`
 5. Priority: BaseOS = `10`, AppStream = `20` (`dnf-plugin-priorities` if needed)
@@ -284,7 +286,7 @@ On `delta`:
 > Objective: Configure access to Flatpak repositories, Install and remove Flatpak software packages
 
 1. Install `flatpak` from RPM
-2. Add the **Flathub** remote system-wide (not per-user)
+2. Add a system-wide (not per-user) remote named `flathub` using the repository file at `https://dl.flathub.org/repo/flathub.flatpakrepo`
 3. Search for the app `gedit` (or `org.gnome.gedit`)
 4. Install it system-wide
 5. List installed Flatpak apps
@@ -710,7 +712,15 @@ case "$(hostname -s)" in
     chk "T9  default ACL present"       "getfacl /srv/project/phoenix 2>/dev/null | grep -q '^default:'"
     chk "T10 ops umask drop-in"         "grep -rq '0027' /etc/profile.d/"
     chk "T13 two repo files"            "test -f /etc/yum.repos.d/lab-baseos.repo -a -f /etc/yum.repos.d/lab-appstream.repo"
-    chk "T13 gpgcheck enabled"          "grep -q 'gpgcheck=1' /etc/yum.repos.d/lab-baseos.repo"
+    chk "T13 gpgcheck=1 in both repos"  "grep -q '^gpgcheck *= *1' /etc/yum.repos.d/lab-baseos.repo && grep -q '^gpgcheck *= *1' /etc/yum.repos.d/lab-appstream.repo"
+    chk "T13 metadata_expire=1h both"   "grep -q '^metadata_expire *= *1h' /etc/yum.repos.d/lab-baseos.repo && grep -q '^metadata_expire *= *1h' /etc/yum.repos.d/lab-appstream.repo"
+    chk "T13 priority BaseOS 10"        "grep -q '^priority *= *10$' /etc/yum.repos.d/lab-baseos.repo"
+    chk "T13 priority AppStream 20"     "grep -q '^priority *= *20$' /etc/yum.repos.d/lab-appstream.repo"
+    chk "T14 flatpak installed"         "rpm -q flatpak"
+    chk "T14 flathub system remote (or offline procedure)" "flatpak remotes --system --columns=name | grep -qx flathub || test -s /root/flatpak_procedure.txt"
+    chk "T14 gedit uninstalled"         "! flatpak list --app --columns=application | grep -qi gedit"
+    chk "T15 nano installed"            "rpm -q nano"
+    chk "T15 nano verifies clean"       "test -z \"\$(rpm -V nano)\""
     chk "T17 charliexfs mounted"        "findmnt /mnt/charliexfs"
     chk "T17 usbdata noexec"            "findmnt -no OPTIONS /mnt/usbdata | grep -q noexec"
     chk "T17 usbdata by LABEL"          "grep '/mnt/usbdata' /etc/fstab | grep -q 'LABEL=USBDATA'"
@@ -1186,7 +1196,7 @@ charlie, as root. The task wants **root's** key, so switch to a root shell for t
 
 ```bash
 sudo -i                                                   # root login shell; ~ is now /root
-ssh-keygen -t ecdsa -b 521 -N '' -f ~/.ssh/id_ecdsa       # nistp521 = ecdsa with 521 bits
+ssh-keygen -t ecdsa ~/.ssh/id_ecdsa       # nistp521 = ecdsa with 521 bits
 ssh-copy-id -i ~/.ssh/id_ecdsa.pub root@delta             # needs delta root pw login to still work
 ssh root@delta hostname                                   # no password prompt
 exit                                                      # back to your own user
