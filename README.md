@@ -403,7 +403,7 @@ sudo virsh net-list --all
 
 ## 🔧 PHASE 2 — Helper Script: Attach Extra Disks
 
-All three exams need multiple raw disks attached unpartitioned. The helper ships with this repo in the `RHCSA-Lab-Scripts/` folder next to this note (`add-disk.sh`, along with `rebuild-rhcsa-labs.sh`, `vm-serial-console.sh`, `ex3-seed-echo.sh`, `rhel10-dvd-download.sh` and the `exN-verify.sh` graders). Point `RHCSA_SCRIPTS` at that folder once per shell — every phase below calls the script through it, so it works wherever you cloned the repo:
+All three exams need multiple raw disks attached unpartitioned. The helper ships with this repo in the `RHCSA-Lab-Scripts/` folder next to this note (`add-disk.sh`, along with `rebuild-rhcsa-labs.sh`, `vm-serial-console.sh`, `ex2-seed-t24.sh`, `ex3-seed-echo.sh`, `rhel10-dvd-download.sh` and the `exN-verify.sh` graders). Point `RHCSA_SCRIPTS` at that folder once per shell — every phase below calls the script through it, so it works wherever you cloned the repo:
 
 ```bash
 # adjust to wherever you cloned the repo
@@ -654,6 +654,14 @@ sudo "$RHCSA_SCRIPTS/add-disk.sh" rhel10-delta   sdb 8
 sudo virt-customize -d rhel10-charlie \
   --root-password "password:$(openssl rand -base64 24)"
 echo "charlie root password scrambled — break in via init=/bin/bash (Task 1)."
+```
+
+### 4.5b — Seed the Task 24 permission faults on charlie
+
+Builds `/opt/finance` with every item wrong (`000`, `root:root`, no SGID/SUID). The script is safe to re-run on a live VM to redo the task: `ssh student@<charlie-ip> 'sudo bash -s' < "$RHCSA_SCRIPTS/ex2-seed-t24.sh"`.
+
+```bash
+sudo virt-customize -d rhel10-charlie --run "$RHCSA_SCRIPTS/ex2-seed-t24.sh"
 ```
 
 ### 4.6 — Seed the rescue.target condition on delta
@@ -1236,7 +1244,8 @@ sudo virt-customize -d rhel10-alpha \
   --run-command 'mkdir -p /srv/webcontent && chown nobody:nobody /srv/webcontent && chmod 777 /srv/webcontent' \
   --run-command 'install -m 777 /dev/null /tmp/badperms'
 sudo virt-customize -d rhel10-bravo   --root-password "password:$(openssl rand -base64 24)"
-sudo virt-customize -d rhel10-charlie --root-password "password:$(openssl rand -base64 24)"
+sudo virt-customize -d rhel10-charlie --root-password "password:$(openssl rand -base64 24)" \
+  --run "${SCRIPTS}/ex2-seed-t24.sh"         # Task 24: broken /opt/finance permissions
 sudo virt-customize -d rhel10-delta   --run-command 'systemctl set-default rescue.target'
 
 echo "== Seeding Exam 3 foxtrot (offline): bogus fstab entry + scrambled root =="

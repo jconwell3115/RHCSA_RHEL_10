@@ -314,20 +314,19 @@ On `delta`:
 
 ---
 
-**Task 16 — GPT Partitions with `parted` (Scripted)** *(charlie, `/dev/vdb`)*
+**Task 16 — GPT Partitions** *(charlie, `/dev/vdb`)*
 
 > Objective: List, create, and delete partitions on GPT disks
 
-Using **`parted` in non-interactive mode** (not `fdisk`/`gdisk`) on `/dev/vdb`:
+On `/dev/vdb`:
 
-1. Create GPT label
+1. Create a GPT partition table
 2. Create partitions:
 
    - `vdb1`: 2 GiB — for XFS
-   - `vdb2`: 1 GiB — for swap
-   - `vdb3`: rest of disk — for LVM (flag: `lvm`)
-3. Verify alignment with `parted /dev/vdb align-check optimal 1`
-4. Run `partprobe /dev/vdb`
+   - `vdb2`: 1 GiB — partition type Linux swap
+   - `vdb3`: rest of disk — partition type Linux LVM
+3. Make sure the kernel sees the new partition table, and verify the layout
 
 ---
 
@@ -646,7 +645,7 @@ Write `/root/health_report.sh`:
 | 13 | Two repo files + GPG import + priorities          |     ✓     | [ ] |
 | 14 | Flatpak remote add + install/uninstall            |     —     | [ ] |
 | 15 | RPM verify/tamper/reinstall                       |     —     | [ ] |
-| 16 | GPT partitions via`parted -s`                   |     ✓     | [ ] |
+| 16 | GPT partitions + partition types                  |     ✓     | [ ] |
 | 17 | XFS by UUID + VFAT by LABEL, noexec/nodev/nosuid  |     ✓     | [ ] |
 | 18 | Swap**file** priority 20                    |     ✓     | [ ] |
 | 19 | Striped LV + 32 MiB PE                            |     ✓     | [ ] |
@@ -1431,10 +1430,35 @@ rpm -qa --last | head             # newest installs first
 
 ### Section 6 — Storage
 
-**T16 — GPT partitions with `parted -s`** *(charlie, /dev/vdb)*
+**T16 — GPT partitions** *(charlie, /dev/vdb)*
+
+Any partitioning tool is fine; the result is what counts. With `fdisk`:
 
 ```bash
 lsblk /dev/vdb                                    # confirm it's the empty 8 GB disk
+sudo fdisk /dev/vdb
+```
+
+```text
+g                      # new GPT partition table
+n  1  <Enter>  +2G     # vdb1, 2 GiB
+n  2  <Enter>  +1G     # vdb2, 1 GiB
+t  2  swap             # type: Linux swap   (L lists every type and alias)
+n  3  <Enter>  <Enter> # vdb3, rest of the disk
+t  3  lvm              # type: Linux LVM
+p                      # review before writing
+w                      # write and exit
+```
+
+```bash
+sudo partprobe /dev/vdb                           # or: udevadm settle
+lsblk /dev/vdb
+sudo fdisk -l /dev/vdb                            # Type column: Linux swap, Linux LVM
+```
+
+Alternative, scripted with `parted -s`:
+
+```bash
 sudo parted -s /dev/vdb mklabel gpt
 sudo parted -s /dev/vdb mkpart charliexfs xfs 1MiB 2049MiB
 sudo parted -s /dev/vdb mkpart charlieswap linux-swap 2049MiB 3073MiB
@@ -1444,13 +1468,7 @@ sudo parted /dev/vdb align-check optimal 1        # "1 aligned"
 sudo partprobe /dev/vdb
 ```
 
-**Verify:**
-
-```bash
-sudo parted -s /dev/vdb unit MiB print            # 3 partitions, flag lvm on #3
-lsblk /dev/vdb
-```
-
+- `parted` verify: `sudo parted -s /dev/vdb unit MiB print` shows 3 partitions with flag `lvm` on #3.
 - **On GPT the first `mkpart` argument is a partition name, not a type.** Write something meaningful (`primary` also works, but it's just a label on GPT).
 - **The fs-type argument only sets a type hint.** It doesn't create a filesystem. You still run `mkfs` (Task 17).
 - Starting at `1MiB` gives correct alignment. Using `MiB` units, not `MB` (powers of 10), avoids "not aligned" warnings.
@@ -1731,12 +1749,10 @@ sleep 75; mount | grep /net/homes   # gone after the 60s idle timeout
 
 **T24 — Permission repair** *(charlie)*
 
-> **Setup** (no lab script creates the broken state, so build it first):
+> **Setup:** `rebuild-rhcsa-labs.sh` seeds the broken tree on charlie with `ex2-seed-t24.sh`. To reset it and redo the task, run from the host:
 >
 > ```bash
-> sudo mkdir -p /opt/finance/{reports,bin,private}
-> printf '#!/bin/bash\necho report\n' | sudo tee /opt/finance/bin/run_report.sh > /dev/null
-> sudo chmod 000 /opt/finance
+> ssh student@10.20.30.11 'sudo bash -s' < "$RHCSA_SCRIPTS/ex2-seed-t24.sh"
 > ```
 
 ```bash
@@ -2487,7 +2503,7 @@ tar -xJf  /root/a.tar.xz -C /root/restore etc/ssh/sshd_config   # one member, no
 | Area            | Exam#1 approach           | Exam#2 approach                                                                                |
 | --------------- | ------------------------- | ---------------------------------------------------------------------------------------------- |
 | Boot target     | graphical → multi-user   | rescue → graphical                                                                            |
-| Partitions      | `fdisk` interactive     | `parted -s` scripted                                                                         |
+| Partitions      | `fdisk` interactive     | GPT + partition types (swap, LVM); `fdisk` or `parted -s`                                  |
 | Filesystems     | XFS + ext4                | XFS +**VFAT** + noexec/nodev/nosuid                                                      |
 | Swap            | Partition                 | **Swap file**                                                                            |
 | LVM             | Linear LVs                | **Striped LV**, `pvmove`, `vgreduce`                                                 |

@@ -142,7 +142,8 @@ sudo virt-customize -d rhel10-alpha \
   --run-command 'mkdir -p /srv/webcontent && chown nobody:nobody /srv/webcontent && chmod 777 /srv/webcontent' \
   --run-command 'install -m 777 /dev/null /tmp/badperms'
 sudo virt-customize -d rhel10-bravo   --root-password "password:$(openssl rand -base64 24)"
-sudo virt-customize -d rhel10-charlie --root-password "password:$(openssl rand -base64 24)"
+sudo virt-customize -d rhel10-charlie --root-password "password:$(openssl rand -base64 24)" \
+  --run "${SCRIPTS}/ex2-seed-t24.sh"         # Task 24: broken /opt/finance permissions
 sudo virt-customize -d rhel10-delta   --run-command 'systemctl set-default rescue.target'
 
 echo "== Seeding Exam 3 foxtrot (offline): bogus fstab entry + scrambled root =="
