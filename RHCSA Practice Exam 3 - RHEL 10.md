@@ -13,6 +13,8 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 >
 > You may use `man`, `info`, and `/usr/share/doc` — no internet access on exam day.
 
+> **🧭 Read every task before you start.** Network and repo setup are prerequisites for several later tasks, so plan your order before touching a VM — the task numbers are not a dependency order.
+
 > **⏱️ This is a 4-hour paper, not a 2.5-hour one.** Tasks 7, 9, 10 and 27 each have six or seven sub-answers to capture, and Tasks 1, 4 and 33 are open-ended diagnosis with no hint of the cause. Splitting into two timed sittings (Sections 1–6, then 7–11) is the better drill. **Do not read a timer overrun here as "not ready"** — the real EX200 presents far fewer, larger tasks.
 >
 > **First cold run: expect 15–20 / 35.** Twenty-six of these tasks cover objectives or scenarios Exams 1 and 2 never touched. A low first score is the diagnostic working, not a failure.

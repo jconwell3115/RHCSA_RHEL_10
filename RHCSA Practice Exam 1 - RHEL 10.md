@@ -13,6 +13,8 @@ note: Answer key is at the BOTTOM of this file. Do not scroll past the Grading C
 >
 > You may use `man`, `info`, and `/usr/share/doc` — no internet access on exam day.
 
+> **🧭 Read every task before you start.** Network and repo setup are prerequisites for several later tasks, so plan your order before touching a VM — the task numbers are not a dependency order.
+
 > **⏱️ Budget is 3 hours, not 2.5.** 35 tasks at 2.5 hrs works out to ~4.3 min/task, which is not achievable. Don't read a timer overrun as "not ready" — the real EX200 presents far fewer, larger tasks, so per-task pacing here doesn't transfer. Confirm the real exam's current duration on Red Hat's objectives page.
 
 > **📌 Answer key is at the end of this file, not under each task.** This exam originally carried its solutions inline; they were moved on 2026-09-09 so it can be re-run cold. Working it with the answers visible trains recognition — the real exam tests recall.
